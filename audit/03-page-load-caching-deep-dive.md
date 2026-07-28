@@ -20,15 +20,17 @@ Every third-party domain on the page — what it caches, for how long, and wheth
 | `fonts.googleapis.com` | Google Font CSS | `private, max-age=86400` | 1 day | Minor. 1-day is fine for repeat visits. `private` is correct (user-agent sniffing). The performance issue is loading 5 font families, not the cache TTL. |
 | `googletagmanager.com` | GTM container JS | `private, max-age=931` | ~15 minutes | No (by design). Short TTL lets Google push container updates. Served from fast edge, pre-gzipped. Lighthouse flags it but it's intentional. |
 | `chiro.inceptionimages.com` | Practice imagery CDN | LiteSpeed server, no CDN headers observed | Unclear — same LiteSpeed origin as main site | **YES if uncached.** Same missing security/caching headers as origin. 30-day static asset cache observed on main domain — verify this domain inherits same. |
-| `highcountrypainrelief.com` (origin) | HTML, CSS, JS, images | **None on HTML**. Static assets: `max-age=2592000` | 30 days (static), 0 (HTML) | **YES — HTML has no cache at all.** Every page load hits PHP. Static asset caching is fine (30 days) but lack of ETag means revalidation uses only Last-Modified. |
+| `highcountrypainrelief.com` (origin) | HTML, CSS, JS, images | Static assets: `max-age=2592000` (30 days) — **correctly configured**. HTML: **no Cache-Control** | 30 days (static), 0 (HTML) | **Static asset caching is in place and working.** The gap is HTML page caching — every page load hits PHP (TTFB 2,540ms). No ETag means revalidation relies on Last-Modified only. LiteSpeed Cache plugin adds server-level HTML caching that bypasses PHP. |
 
-### The Two Real Cache Problems
+### The Actual Cache Gaps
 
-1. **Origin HTML: no cache.** Fixed by LiteSpeed Cache plugin (page cache at server level). Not a header-config fix — needs a caching layer.
+1. **Static asset caching: already in place.** 30-day `max-age` on all CSS, JS, images, fonts. This is correctly configured and working. LiteSpeed serves these directly from disk.
 
-2. **YouTube thumbnails: 2-hour expiry (verified) × 35+ images × ~13 KB = 455 KB per session.** Fixed by facade pattern — don't load thumbnails until click. Eliminates the problem entirely rather than trying to cache around it. WP YouTube Lyte with local thumbnail caching eliminates even the on-click request.
+2. **HTML page caching: absent.** Every page load executes WordPress + Beaver Builder + Yoast from scratch. TTFB 2,540ms. Fixed by LiteSpeed Cache plugin (server-level HTML cache — bypasses PHP on cache hit). This is the single highest-impact fix.
 
-3. **S3 config JS: no Cache-Control.** Fixed by adding S3 object metadata. Control depends on ReviewWave's S3 bucket access. If they won't fix it, CloudFront in front of the site will apply its own 24-hour minimum.
+3. **YouTube thumbnails: 2-hour expiry × 35 images.** Fixed by facade — eliminates requests entirely rather than trying to cache around YouTube's short TTL.
+
+4. **No CDN layer.** Both domains (`highcountrypainrelief.com`, `chiro.inceptionimages.com`) resolve to AWS EC2 IPs with LiteSpeed serving directly. A CDN (Cloudflare free tier or QUIC.cloud) would add edge caching and reduce origin load.
 
 ---
 
@@ -216,13 +218,15 @@ Low-frequency-update brochure site — conservative TTLs work.
 
 | Layer | Current | Target | TTL |
 |-------|---------|--------|-----|
-| **CDN** | None | Cloudflare (free) or QUIC.cloud (LiteSpeed native) | Edge cache: 7 days for static, 24h for HTML |
-| **Page Cache** | None | LiteSpeed Cache — server-level full HTML | 7 days (front page: 24h) |
+| **CDN** | None — both domains resolve to AWS EC2 IPs (44.223.213.21, 18.214.60.67), LiteSpeed directly | Cloudflare (free) or QUIC.cloud (LiteSpeed native) | Edge cache: 7 days for static, 24h for HTML |
+| **Page Cache** | None — every request runs PHP | LiteSpeed Cache — server-level full HTML, bypasses PHP on hit | 24h default, 1h front page |
 | **Object Cache** | None | Redis via LSCache plugin | Persistent, invalidated on content change |
-| **Browser Cache — HTML** | None | `Cache-Control: public, max-age=86400` | 24 hours |
-| **Browser Cache — Static** | `max-age=2592000` (30 days) | `max-age=31536000` (1 year) + ETag | 1 year |
+| **Static Asset Compression** | **Brotli active** (`content-encoding: br` on CSS/JS/fonts) — already working | No change needed | N/A |
+| **HTML Compression** | None — 216 KB raw | Brotli via LiteSpeed config or LSCache | N/A |
+| **Browser Cache — HTML** | None | `Cache-Control: public, max-age=86400` for returning visitors | 24h |
+| **Browser Cache — Static** | `max-age=2592000` (30 days) — **already correctly configured** | Add ETag for better revalidation. Extend to 1 year only if hash-busting verified through CDN. | 30 days (current, safe) or 1 year (if hash-verified) |
 | **Browser Cache — Fonts** | 30 days (FA woff2 preloaded) | 1 year (versioned font URLs are immutable) | 1 year |
-| **YouTube Thumbnails** | ~6 hours (i.ytimg.com) | **Eliminated via facade** — 0 KB loaded until click | N/A |
+| **YouTube Thumbnails** | ~2 hours (i.ytimg.com) | **Eliminated via facade** — 0 KB loaded until click | N/A |
 
 ---
 

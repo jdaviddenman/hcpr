@@ -1,7 +1,7 @@
 # Page Speed Performance Audit: highcountrypainrelief.com
 
 **Date:** 2026-07-28 | **Platform:** WordPress 7.0.2 + Beaver Builder 2.10.3 + Beaver Themer 1.5.3.2 + BB Theme 1.7.19.2
-**Server:** LiteSpeed (no CDN, no page cache, no HTML compression) | **Scope:** Homepage + 44 sitemap pages
+**Server:** LiteSpeed on AWS EC2 (44.223.213.21). No CDN. Static asset caching: 30-day max-age (correct). HTML page caching: absent (every request hits PHP). No cache plugin installed. No HTML compression.
 
 **POCs:** James David Enman (jdaviddenman@gmail.com) | Amy Denman (amydenman@gmail.com)
 
@@ -153,23 +153,23 @@ All six root causes affect both mobile and desktop scores equally:
 
 ### CRITICAL — Blocking First Paint
 
-**C1: No page caching — TTFB 2,540ms**
+**C1: No HTML page caching — TTFB 2,540ms**
 
-- **Evidence:** `curl -sI https://www.highcountrypainrelief.com/` returns zero `Cache-Control` or caching headers. Server is LiteSpeed — native LSCache support exists but is unused. No `x-litespeed-cache` header present. TTFB measured at 2.426-3.811s (varies by 1.4s between runs — uncached PHP execution variance).
-- **Impact:** Every page load executes WordPress + Beaver Builder + Yoast from scratch. TTFB is 3x the 800ms threshold. All other resources wait for this — it gates every downstream metric.
-- **Fix:** Install and configure LiteSpeed Cache plugin (free, native to LiteSpeed). Enable page cache: 24-hour default TTL, front page 1-hour TTL. Enable ESI for dynamic elements. Add `fl_builder` to URI Excludes to prevent editor breakage. Enable crawler to pre-warm cache.
+- **Evidence:** Static assets (CSS, JS, images, fonts) are correctly cached with `max-age=2592000` (30 days). However, HTML responses carry **zero caching headers** — every page load executes WordPress + Beaver Builder + Yoast from scratch. Server is LiteSpeed on AWS EC2 (`44.223.213.21`). No page cache plugin installed. No `x-litespeed-cache` header present. TTFB measured at 2.426-3.811s (varies by 1.4s between runs — uncached PHP execution variance). No CDN layer — both origin domains resolve directly to AWS EC2 IPs.
+- **Impact:** Every page load runs the full WordPress stack. TTFB is 3x the 800ms threshold. All downstream metrics (FCP, LCP, TBT) are gated by this. Note: static assets are NOT the problem — they already have 30-day browser caching.
+- **Fix:** Install and configure LiteSpeed Cache plugin (free, native to LiteSpeed server). This adds server-level HTML page caching that bypasses PHP on cache hit. Enable page cache: 24-hour default TTL, front page 1-hour TTL. Enable ESI for dynamic elements. Add `fl_builder` to URI Excludes to prevent editor breakage. Enable crawler to pre-warm cache. Additionally: add Cloudflare free tier or QUIC.cloud for a CDN layer.
 - **Effort:** 2-3 hours (install, configure, test all page types, BB editor verification).
-- **Projected outcome:** TTFB 2,540ms → 300-500ms. LCP improvement ~2,000ms from TTFB reduction alone.
+- **Projected outcome:** TTFB 2,540ms → 300-500ms on cache hit. LCP improvement ~2,000ms from TTFB reduction alone.
 - **Verification:** `curl -sI https://www.highcountrypainrelief.com/ | grep -i x-litespeed-cache` returns `hit` on second request. TTFB via `curl -w '%{time_starttransfer}'` under 500ms.
 
-**C2: No text compression — 216 KB HTML served raw**
+**C2: HTML served uncompressed — 216 KB raw (static assets already Brotli-compressed)**
 
-- **Evidence:** `Content-Encoding` header absent on all responses regardless of `Accept-Encoding` request header. Tested with `gzip`, `br`, and `gzip, deflate, br` — server never compresses. HTML is 216,845 bytes raw. Lighthouse estimate: 39 KB savings. ReviewWave S3 script (`rw-embed-data.s3.amazonaws.com/6809-a7ea-455a-196e-77a8.js`, 55.3 KB) also served uncompressed — this is a third-party asset and the site owner cannot control its compression.
-- **Impact:** 216 KB transferred vs. ~50-70 KB compressed. On Slow 4G (1.6 Mbps), 216 KB raw HTML alone takes ~1.1s to download before any rendering can begin.
-- **Fix:** Enable Gzip (level 6) or Brotli via LiteSpeed config or `.htaccess`. Note: the ReviewWave S3 script is not controllable — self-hosting or replacing that service would be required to compress it.
-- **Effort:** 15 minutes.
-- **Projected outcome:** HTML transfer size reduced by 65-70%. FCP improvement ~500ms on throttled connections.
-- **Verification:** `curl -sI -H 'Accept-Encoding: gzip' https://www.highcountrypainrelief.com/ | grep -i content-encoding` returns `gzip`.
+- **Evidence:** Static assets (CSS, JS, fonts) are correctly served with `content-encoding: br` (Brotli). **This is working.** However, the HTML document (216,845 bytes) has **no `Content-Encoding`** regardless of `Accept-Encoding` request header. Lighthouse estimate: 39 KB savings from text compression — the largest component of this is the ReviewWave S3 script (`rw-embed-data.s3.amazonaws.com/6809-a7ea-455a-196e-77a8.js`, 55.3 KB, third-party — not controllable). The HTML itself would compress to ~50-70 KB.
+- **Impact:** 216 KB HTML transferred vs. ~50-70 KB compressed. On Slow 4G (1.6 Mbps), the raw HTML alone takes ~1.1s to download before rendering can begin. Note: this is a smaller fix than initially estimated because static assets are already compressed.
+- **Fix:** Enable Gzip or Brotli for HTML responses via LiteSpeed config or `.htaccess`. LiteSpeed Cache plugin (C1) handles this automatically.
+- **Effort:** 5 minutes (LiteSpeed config). Or: resolved automatically by C1 (LSCache plugin).
+- **Projected outcome:** HTML transfer size reduced by 65-70% when not cached. Combined with page cache (C1): HTML served from cache is pre-compressed and served in <100ms. Note: the 39 KB Lighthouse estimate includes third-party assets the site cannot control.
+- **Verification:** `curl -sI -H 'Accept-Encoding: br' https://www.highcountrypainrelief.com/ | grep -i content-encoding` returns `br`.
 
 **C3: 14.9 MB background video blocks LCP — 15,940ms**
 
@@ -251,14 +251,14 @@ All six root causes affect both mobile and desktop scores equally:
 - **Projected outcome:** Text visible immediately using fallback fonts. CLS reduction from font reflow. Font payload reduction ~57 KB → ~25 KB.
 - **Verification:** Google Fonts URL includes `&display=swap`. Lighthouse "Ensure text remains visible" passes.
 
-**M4: No CDN — all assets from Boone NC origin**
+**M4: No CDN — both domains serve from AWS EC2 origin**
 
-- **Evidence:** No CDN headers present (`cf-cache-status`, `x-cache`, `age`, `x-cdn`). All static assets and HTML served directly from LiteSpeed origin. `dns-prefetch` used for `fonts.googleapis.com` instead of `preconnect` — costs ~1 RTT on font CSS request.
-- **Impact:** TTFB varies by geographic distance to origin. Static assets with 30-day cache (`max-age=2592000`) would benefit from edge caching for first-time visitors. The `dns-prefetch` vs `preconnect` gap wastes ~100ms on every font load.
-- **Fix:** Add Cloudflare free tier or QUIC.cloud (LiteSpeed native, free tier). Change `dns-prefetch //fonts.googleapis.com` to `<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>`. If using Cloudflare: enable Brotli, enable Auto Minify, set Browser Cache TTL to 1 year.
-- **Effort:** 1-2 hours.
-- **Projected outcome:** Edge TTFB <100ms for cached assets. DNS + TLS handshake eliminated for repeat visitors in same region.
-- **Verification:** CDN headers present in response. `preconnect` link tag visible in source. TTFB from multiple geographic locations under 500ms.
+- **Evidence:** DNS resolution: `highcountrypainrelief.com` → `44.223.213.21` (AWS EC2), `chiro.inceptionimages.com` → `18.214.60.67` (AWS EC2). Both IPs run LiteSpeed directly. No CDN headers present (`cf-cache-status`, `x-cache`, `age`, `via`, `x-amz-cf-id`). No proxy layer. Static assets are served from origin with 30-day browser cache — this is working correctly for repeat visitors. First-time visitors and geographically distant users experience full origin latency. The `dns-prefetch` for `fonts.googleapis.com` should be upgraded to `preconnect` — currently costs ~1 RTT on every font CSS request.
+- **Impact:** Geographically distant visitors experience higher latency. Origin handles all traffic. No edge caching for static assets (browser cache works for repeat visits, but each unique visitor's first load hits origin). The `dns-prefetch` vs `preconnect` gap wastes ~100ms on font loads.
+- **Fix:** Add Cloudflare free tier or QUIC.cloud (LiteSpeed native, free tier). Change `dns-prefetch //fonts.googleapis.com` to `<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>`. If using Cloudflare: enable Brotli, Auto Minify, set Browser Cache TTL to 1 year. Note: this is complementary to LSCache page caching (C1) — CDN caches at the edge, LSCache caches at the server.
+- **Effort:** 30 minutes (preconnect). 1-2 hours (CDN setup + DNS).
+- **Projected outcome:** Edge TTFB <100ms for cached assets. Reduced origin load. Static asset edge caching improves first-visit performance globally.
+- **Verification:** CDN headers present in response. `preconnect` link tag visible in source. DNS resolves to CDN edge IPs instead of origin IPs.
 
 ### LOW — Hygiene
 
