@@ -11,11 +11,11 @@ Every third-party domain on the page — what it caches, for how long, and wheth
 
 | Domain | Service | Cache-Control | Max-Age | Problem? |
 |--------|---------|--------------|---------|----------|
-| `i.ytimg.com` | YouTube thumbnails | `public, max-age=7200` (verified via `curl -sI`) | **2 hours** | **YES — severe.** 35+ thumbnails reload every 2 hours for returning visitors. 455 KB re-downloaded per session. Combined with eager loading of all 35, this is a top-3 performance issue. Even worse than initially estimated. |
+| `i.ytimg.com` | YouTube thumbnails | `public, max-age=7200` (verified via `curl -sI`) | **2 hours (browser cache), then conditional revalidation** | **YES.** 35+ thumbnails eagerly loaded. After 2 hours, browsers send conditional requests (304 Not Modified — thumbnails for old videos rarely change). Full re-download only occurs on first visit or if the creator updated the thumbnail. The real problem is 35 eager HTTP requests and ~455 KB on cache miss, not 455 KB re-downloaded every 2 hours. Fixed by facade pattern — eliminates requests entirely. |
 | `i.vimeocdn.com` | Vimeo thumbnails/video | `max-age=2592000` | 30 days | No. Generous cache. Only 1-2 Vimeo embeds on site. |
 | `cdn.userway.org` | UserWay accessibility widget | `max-age=3600, public` | 1 hour (browser). CloudFront edge caches ~21 days. | Low. Short browser cache is acceptable for a widget that updates. CloudFront absorbs repeat requests. Main issue is payload size, not cache TTL. |
 | `cdn.reviewwave.com` | ReviewWave reviews + chat | Likely `max-age=3600` (S3+CloudFront, same infra as UserWay) | ~1 hour | Low. Same S3+CloudFront architecture. |
-| `rw-embed-data.s3.amazonaws.com` | ReviewWave config JS | **None** (S3 default) | **0 — no Cache-Control at all** | **YES.** S3 objects without Cache-Control headers get no browser caching. If behind CloudFront: CloudFront applies 24-hour default. Either way, suboptimal. Should be `max-age=31536000, immutable` for these hashed config files. |
+| `rw-embed-data.s3.amazonaws.com` | ReviewWave config JS | **Unable to verify** (endpoint returned 403) | Unknown — S3 default is no Cache-Control unless set at upload | **Likely suboptimal.** S3 objects without Cache-Control get no browser `max-age`. If CloudFront sits in front: CloudFront applies 24-hour default TTL at edge but serves `max-age=0` to browsers. Should be `max-age=31536000, immutable` if these are hashed/versioned config files. The site owner cannot fix third-party S3 metadata. |
 | `fonts.gstatic.com` | Google Font files (woff2) | `max-age=31536000` | 1 year | No. Optimal. Versioned URLs, immutable. |
 | `fonts.googleapis.com` | Google Font CSS | `private, max-age=86400` | 1 day | Minor. 1-day is fine for repeat visits. `private` is correct (user-agent sniffing). The performance issue is loading 5 font families, not the cache TTL. |
 | `googletagmanager.com` | GTM container JS | `private, max-age=931` | ~15 minutes | No (by design). Short TTL lets Google push container updates. Served from fast edge, pre-gzipped. Lighthouse flags it but it's intentional. |
@@ -60,9 +60,11 @@ Replace the 14.9 MB background video with a static WebP poster image (~50 KB):
 | Load Delay | 12,730ms | **~100ms** | Defer all non-critical scripts; CSS inlined or deferred; browser discovers image element immediately |
 | Load Time | 140ms | **~50ms** | 50 KB WebP poster vs. 14.9 MB MP4 — 300× smaller |
 | Render Delay | 520ms | **~400ms** | Image decode is faster than video first-frame decode |
-| **Total LCP** | **15,940ms** | **~950ms** | **Well under the 2.5s threshold** |
+| **Total LCP** | **15,940ms** | **<1,500ms** | **Passes the 2.5s Core Web Vitals threshold with margin** |
 
-This one change — static poster + page cache — produces a 16× LCP improvement. The CLS also improves because the video element gets explicit dimensions.
+This one change — static poster + page cache — reduces LCP by ~90%. The CLS also improves because the video element gets explicit dimensions.
+
+**Realism note:** Sub-1s LCP targets are achievable on near-empty pages on exceptional hosting. With 3,178 DOM elements, UserWay, ReviewWave, and 35 YouTube facades (even when deferred), this site's realistic LCP target is **1.0-1.5s** after all fixes. Achieving sub-1s would require eliminating UserWay entirely and significantly reducing DOM — work outside config scope.
 
 ---
 
@@ -93,13 +95,13 @@ Instead of loading the YouTube thumbnail + iframe on page load, display a static
 ### Recommendation: Option A — `lite-youtube-embed` Web Component
 
 **Rationale:**
-- ~4 KB total (JS + CSS) vs. 455 KB of thumbnails — 100× smaller
-- Zero dependencies. Works in any HTML context. No plugin to maintain.
+- ~3 KB JS + ~1 KB CSS. Zero dependencies. Works in any HTML context. No plugin to maintain.
 - 35 instances of `<lite-youtube>` on a page share one JS/CSS load
 - Renders its own `background-image` internally using the standard `i.ytimg.com` URL — but **only after user click**, not on page load
 - On click: replaces itself with real YouTube iframe (`youtube-nocookie.com`, `autoplay=1`)
 - Accessible: `playlabel` attribute for screen readers
 - Maintained by Paul Irish (Google Chrome team), Apache-2.0 license
+- **Measurable benefit:** 0 KB loaded until click vs. 455 KB eagerly loaded
 
 **Implementation:**
 
@@ -170,7 +172,7 @@ Low-frequency-update brochure site — conservative TTLs work.
 |------------|-----|-----------|
 | Default Public Cache | 604800s (7 days) | Content changes rarely |
 | Front Page TTL | 86400s (24 hours) | Homepage may update with promos/announcements |
-| Browser Cache | 31536000s (1 year) | Static assets rarely change |
+| Browser Cache | 31536000s (1 year) — **only if hash-based cache-busting verified through CDN** | BB uses `?ver=` query strings for cache-busting. Some CDNs strip query strings by default. If hash-busting cannot be verified through CDN: keep current 30-day setting. |
 | Private Cache | 0 (disabled) | No logged-in user content to cache |
 
 **Purge strategy:** Purge all on plugin/theme update. Auto-purge homepage + affected pages on post publish/update. No need for aggressive short TTLs — purge-on-change is more efficient.
@@ -204,7 +206,9 @@ Low-frequency-update brochure site — conservative TTLs work.
 | **Bootstrap JS** | BB Theme | Synchronous in `<body>` | 162ms | `defer` — below-fold interactions only | ~160ms |
 | **BB layout.js** (×2) | bb-plugin/cache/ | Synchronous in `<body>` | 13,467ms (throttled) | `defer` — these are page-specific layout scripts, no above-fold JS needed | ~5,000ms TBT |
 
-**Aggregate TBT savings from deferral: ~9,400ms** (from 18,520ms → ~9,000ms). Remaining TBT is primarily the 14.9 MB video and uncompressed assets.
+**Projected TBT reduction from deferral: 3,000-5,000ms** (from 18,520ms → ~13,500-15,500ms). Deferral shifts script execution out of the FCP→TTI measurement window but does not eliminate the work. UserWay (3,242ms) is the single largest contributor and the highest-impact deferral target.
+
+**Note on TBT measurement:** TBT is measured with 4x CPU throttling on mobile Lighthouse. Deferring a script does not eliminate its CPU time — it shifts execution to a later point. If deferred scripts execute during the TBT measurement window after deferral, TBT is unchanged from those scripts. The projected reduction assumes deferred scripts execute after TTI.
 
 ---
 
@@ -234,8 +238,8 @@ Low-frequency-update brochure site — conservative TTLs work.
 | 6 | **Enable JS minify (combine OFF initially)** | 2 min | Test page: no JS errors in console |
 | 7 | **Defer non-critical JS** (exclude jquery.js, bxslider.js) | 5 min | Lighthouse: render-blocking audit passes |
 | 8 | **Enable Gzip via LiteSpeed** (or .htaccess) | 5 min | `curl -sI -H 'Accept-Encoding: gzip' \| grep Content-Encoding` shows `gzip` |
-| 9 | **Replace background video with static WebP poster** | 2 hrs | Lighthouse: LCP element = small image, LCP <3s |
-| 10 | **Implement YouTube facade** (custom or WP YouTube Lyte) | 1 hr | Network tab: zero i.ytimg.com requests until click |
+| 9 | **Replace background video with static WebP poster** | 2-4 hrs | Lighthouse: LCP element is `<img>`, LCP <3s. BB row background video cannot be "replaced" in one click — requires: (1) remove BB row video background, (2) set static image as row background, (3) design approval for new static hero, (4) custom JS if video playback on interaction is desired |
+| 10 | **Implement YouTube facade** (lite-youtube-embed or WP YouTube Lyte) | 2-3 hrs (manual HTML module replacement, 35 instances). 1-2 hrs if WP YouTube Lyte plugin works with BB text modules. | Network tab: zero i.ytimg.com requests until click |
 | 11 | **Add security headers** (.htaccess) | 10 min | `curl -sI \| grep -iE 'hsts\|x-content\|x-frame'` returns all 6 |
 | 12 | **Update Swiper 8.4.7 → 12.1.2+** | 30 min | CVE-2026-27212 resolved; sliders still functional |
 | 13 | **Add CDN** (Cloudflare or QUIC.cloud) | 1-2 hrs | CDN headers present in response; TTFB <300ms |
