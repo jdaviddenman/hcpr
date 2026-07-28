@@ -1,15 +1,15 @@
-# SEO Performance Audit: highcountrypainrelief.com
+# Page Speed Performance Audit: highcountrypainrelief.com
 
 **Date:** 2026-07-28 | **Platform:** WordPress 7.0.2 + Beaver Builder 2.10.3 + Beaver Themer 1.5.3.2 + BB Theme 1.7.19.2
 **Server:** LiteSpeed (no CDN, no page cache) | **Scope:** Homepage + all 44 sitemap pages
+
+**POCs:** James David Enman (jdaviddenman@gmail.com) | Amy Denman (amydenman@gmail.com)
 
 ---
 
 ## 1. Executive Summary
 
-High Country Pain Relief's web presence underperforms across technical SEO, on-page optimization, and performance. The site is a WordPress + Beaver Builder build on LiteSpeed with no CDN, no page caching layer, and a 2.4s TTFB signaling uncached PHP execution on every request.
-
-**Performance is the single largest problem.** PageSpeed mobile score: 27/100. Desktop: 47/100. LCP 15.9s (6.4x threshold). TBT 18,520ms (92x threshold). CLS 0.184 (failing). A 14.9 MB background video (`hiking.mp4`) blocks Largest Contentful Paint. Zero scripts use async/defer. Zero HTML compression. 3,178 DOM elements.
+High Country Pain Relief's on-page SEO is functional — Yoast v28.1 provides baseline schema, meta tags are present on most pages, and local keyword targeting is directionally correct. **The critical failure is page speed.** The site scores 27/100 on mobile and 47/100 on desktop Lighthouse — both in the "poor" range (0-49). This is not a content problem. It is a server configuration, caching, and resource-loading problem.
 
 The 20-point mobile-desktop delta confirms the root causes are **architectural, not situational** — even on unthrottled desktop CPU, the site cannot break 50/100.
 

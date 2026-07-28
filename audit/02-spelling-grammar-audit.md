@@ -2,6 +2,8 @@
 
 **Date:** 2026-07-28 | **Scope:** 44 pages crawled (all sitemap URLs) | **Errors found:** 40
 
+**POCs:** James David Enman (jdaviddenman@gmail.com) | Amy Denman (amydenman@gmail.com)
+
 ---
 
 ## Summary
