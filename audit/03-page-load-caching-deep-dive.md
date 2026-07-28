@@ -11,7 +11,7 @@ Every third-party domain on the page — what it caches, for how long, and wheth
 
 | Domain | Service | Cache-Control | Max-Age | Problem? |
 |--------|---------|--------------|---------|----------|
-| `i.ytimg.com` | YouTube thumbnails | `public, max-age=21600` (varies) | **~6 hours** | **YES — severe.** 35+ thumbnails reload every ~6 hours for returning visitors. 455 KB re-downloaded per session. Combined with eager loading of all 35, this is a top-3 performance issue. |
+| `i.ytimg.com` | YouTube thumbnails | `public, max-age=7200` (verified via `curl -sI`) | **2 hours** | **YES — severe.** 35+ thumbnails reload every 2 hours for returning visitors. 455 KB re-downloaded per session. Combined with eager loading of all 35, this is a top-3 performance issue. Even worse than initially estimated. |
 | `i.vimeocdn.com` | Vimeo thumbnails/video | `max-age=2592000` | 30 days | No. Generous cache. Only 1-2 Vimeo embeds on site. |
 | `cdn.userway.org` | UserWay accessibility widget | `max-age=3600, public` | 1 hour (browser). CloudFront edge caches ~21 days. | Low. Short browser cache is acceptable for a widget that updates. CloudFront absorbs repeat requests. Main issue is payload size, not cache TTL. |
 | `cdn.reviewwave.com` | ReviewWave reviews + chat | Likely `max-age=3600` (S3+CloudFront, same infra as UserWay) | ~1 hour | Low. Same S3+CloudFront architecture. |
@@ -26,7 +26,7 @@ Every third-party domain on the page — what it caches, for how long, and wheth
 
 1. **Origin HTML: no cache.** Fixed by LiteSpeed Cache plugin (page cache at server level). Not a header-config fix — needs a caching layer.
 
-2. **YouTube thumbnails: ~6-hour expiry × 35+ images × ~13 KB = 455 KB per session.** Fixed by facade pattern — don't load thumbnails until click. Eliminates the problem entirely rather than trying to cache around it.
+2. **YouTube thumbnails: 2-hour expiry (verified) × 35+ images × ~13 KB = 455 KB per session.** Fixed by facade pattern — don't load thumbnails until click. Eliminates the problem entirely rather than trying to cache around it. WP YouTube Lyte with local thumbnail caching eliminates even the on-click request.
 
 3. **S3 config JS: no Cache-Control.** Fixed by adding S3 object metadata. Control depends on ReviewWave's S3 bucket access. If they won't fix it, CloudFront in front of the site will apply its own 24-hour minimum.
 
@@ -73,7 +73,7 @@ This one change — static poster + page cache — produces a 16× LCP improveme
 - 35+ YouTube video thumbnails loaded as CSS `background-image` on `<div class="pp-video-image-overlay">`
 - Each thumbnail: ~13 KB from `i.ytimg.com`
 - Total per page load: **~455 KB**
-- YouTube CDN cache: **~6 hours** (`max-age=21600`)
+- YouTube CDN cache: **2 hours** (`max-age=7200`, verified via `curl -sI`)
 - All loaded **eagerly** — every thumbnail downloads on every page load
 - Lighthouse "Defer offscreen images" audit: **758 KiB estimated savings**
 
@@ -85,78 +85,54 @@ Instead of loading the YouTube thumbnail + iframe on page load, display a static
 
 | Option | Size | Complexity | BB Compatible? | Best For |
 |--------|------|------------|----------------|----------|
-| **A) `lite-youtube` web component** | 15 KB JS | Drop-in — replace `<div>` with `<lite-youtube videoid="...">` | Requires template override or shortcode | Developers comfortable with custom elements |
-| **B) Custom facade** (static img + onclick) | ~2 KB inline JS | Build once, reuse | Requires BB module customization | Full control, minimal overhead |
-| **C) WP YouTube Lyte plugin** | Plugin overhead (~50 KB) | Install + configure | Plugin-level, may conflict with BB pp-video module | Non-technical users, quick setup |
+| **A) `lite-youtube-embed` web component** | ~3 KB JS + ~1 KB CSS | Drop-in — replace `<div>` with `<lite-youtube videoid="...">` | Works via BB HTML module. Zero dependencies. Apache-2.0 by Paul Irish. | Developers; minimal overhead; 224× faster render claimed |
+| **B) WP YouTube Lyte plugin** | Plugin overhead | Install + configure. 30,000+ active installs. Local thumbnail caching option. | May need `[lyte]` shortcode if BB bypasses `the_content` filter | Non-technical editors; WP-native; local thumbnail cache |
+| **C) Custom facade** (static img + onclick) | ~2 KB inline JS | Build once, reuse | Requires BB module customization | Full control, minimal overhead |
+| **D) Embed Plus for YouTube** | Heavy plugin | Facade mode available | Plugin-level | Overkill — gallery/livestream features not needed |
 
-### Recommendation: Option B — Custom Facade (Beaver Builder Module Override)
+### Recommendation: Option A — `lite-youtube-embed` Web Component
 
 **Rationale:**
-- Option A (lite-youtube) requires replacing BB's `pp-video` module output with a custom web component — non-trivial template override.
-- Option C (WP YouTube Lyte) adds plugin overhead and may not intercept BB's custom video module.
-- Option B adds ~2 KB of inline JS, replaces the 455 KB thumbnail payload with a single local SVG play button, and works with any video module that outputs a known thumbnail URL.
+- ~4 KB total (JS + CSS) vs. 455 KB of thumbnails — 100× smaller
+- Zero dependencies. Works in any HTML context. No plugin to maintain.
+- 35 instances of `<lite-youtube>` on a page share one JS/CSS load
+- Renders its own `background-image` internally using the standard `i.ytimg.com` URL — but **only after user click**, not on page load
+- On click: replaces itself with real YouTube iframe (`youtube-nocookie.com`, `autoplay=1`)
+- Accessible: `playlabel` attribute for screen readers
+- Maintained by Paul Irish (Google Chrome team), Apache-2.0 license
 
 **Implementation:**
 
-```php
-// In child theme functions.php — filter BB video module output
-// Replace background-image with a static placeholder
-// Add data-youtube-id attribute for click handler
+```html
+<!-- Load once in <head> or footer -->
+<link rel="stylesheet" href="lite-yt-embed.css">
+<script defer src="lite-yt-embed.js"></script>
 
-add_filter('fl_builder_module_attributes', function($attrs, $module) {
-    if ($module->slug === 'pp-video' && isset($attrs['data-youtube-id'])) {
-        // Don't load thumbnail until click
-        $attrs['data-thumbnail'] = ''; // clear eager thumbnail
-        $attrs['class'] .= ' youtube-facade';
-    }
-    return $attrs;
-}, 10, 2);
+<!-- Replace each pp-video-image-overlay div: -->
+<lite-youtube videoid="C7XENcnzvzc" playlabel="Play: Patient Testimonial"></lite-youtube>
 ```
 
-```css
-/* youtube-facade.css — static play button overlay */
-.youtube-facade {
-    background: #000 center/cover no-repeat;
-    position: relative;
-    cursor: pointer;
-}
-.youtube-facade::after {
-    content: '';
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    width: 68px; height: 48px;
-    background: url('data:image/svg+xml,...') center/contain no-repeat; /* inline SVG play button */
-}
-```
+**For Beaver Builder integration:**
+- Add the JS/CSS via child theme `functions.php` (`wp_enqueue_script` + `wp_enqueue_style`) or via BB global settings (Settings → Beaver Builder → CSS/JS)
+- Replace each `pp-video` module's output with an HTML module containing the `<lite-youtube>` tag
+- Or: write a small BB custom module that outputs `<lite-youtube>` — reusable across all 35 instances
 
-```js
-// youtube-facade.js — ~1 KB
-document.querySelectorAll('.youtube-facade').forEach(function(el) {
-    el.addEventListener('click', function() {
-        var videoId = this.getAttribute('data-youtube-id');
-        var iframe = document.createElement('iframe');
-        iframe.src = 'https://www.youtube.com/embed/' + videoId + '?autoplay=1';
-        iframe.setAttribute('allowfullscreen', '');
-        iframe.setAttribute('frameborder', '0');
-        this.innerHTML = '';
-        this.appendChild(iframe);
-        this.classList.remove('youtube-facade');
-    });
-});
+**For WP YouTube Lyte (if plugins preferred):**
 ```
+[lyte id="C7XENcnzvzc" /]
+```
+Enable "Cache thumbnails locally" in plugin settings — eliminates i.ytimg.com requests entirely, even after click (the poster thumbnail is self-hosted).
 
 **Performance gain:**
-- 455 KB deferred per page load → 0 KB until first click
+- 455 KB deferred per page load → **0 KB until first click**
 - Lighthouse "Defer offscreen images" goes from 758 KiB savings → **fully resolved (0)**
 - 35 fewer HTTP requests on page load
-- No cache-expiry problem — no thumbnails loaded at all until interaction
+- No cache-expiry problem — thumbnails are never loaded until user interaction
+- If WP YouTube Lyte with local cache: ~455 KB saved per click as well (poster served locally)
 
-### What About the 35 Vimeo/YouTube Thumbnails Used as Background Images?
+### What About the Full YouTube Iframe Penalty?
 
-The current approach uses CSS `background-image: url(i.ytimg.com/.../hqdefault.jpg)` inline on each `pp-video-image-overlay` div. These are NOT `<img>` tags — they're CSS backgrounds. The browser still downloads them, and `loading="lazy"` doesn't apply to CSS backgrounds.
-
-The facade pattern above replaces these CSS background-images with a single inline SVG play button (zero HTTP requests). The YouTube thumbnail is never fetched until the user clicks.
+If these 35 embeds were full iframes (not just thumbnails), each would cost ~500 KB (player JS, CSS, fonts, tracking). The facade pattern avoids loading the iframe until click — saving up to **17.5 MB** per page view for 35 videos.
 
 ---
 
