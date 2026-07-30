@@ -24,6 +24,8 @@
 | `fonts.googleapis.com` | Font CSS | `private, max-age=86400` | direct GET | Minor. `private` is correct — the CSS varies by user agent. The issue is 5 families and no `display=swap`, not the TTL. |
 | `i.vimeocdn.com` | Vimeo thumbnail | `max-age=2592000` | direct GET | No. 30 days, 15 KiB, one embed. |
 
+> **Provenance — the ReviewWave S3 endpoint.** The 2026-07-28 audit recorded this endpoint as returning **403 to direct requests** and marked its cache policy unverifiable. That could not be reproduced on 2026-07-30: **both GET and HEAD return 200.** The original 403 is unexplained — plausibly transient, or IP- or region-based on AWS's side — and O is not claiming it was a HEAD-request artifact, because HEAD works. The figures in the row above are measured, not inferred. If a future check hits a 403 again, that is the endpoint being inconsistent rather than the earlier audit being wrong.
+
 ### The actual cache gaps
 
 1. **HTML has no `Cache-Control`.** 44/44 URLs. Fix at the server or via LSCache.
