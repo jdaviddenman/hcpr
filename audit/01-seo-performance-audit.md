@@ -3,7 +3,7 @@
 **Date:** 2026-07-28 | **Platform:** WordPress 7.0.2 + Beaver Builder 2.10.3 + Beaver Themer 1.5.3.2 + BB Theme 1.7.19.2
 **Server:** LiteSpeed (no CDN, no page cache) | **Scope:** Homepage + all 44 sitemap pages
 
-**POCs:** James David Enman (jdaviddenman@gmail.com) | Amy Denman (amydenman@gmail.com)
+**POCs:** James David Enman | Amy Denman
 
 ---
 

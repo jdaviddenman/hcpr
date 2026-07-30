@@ -1,7 +1,7 @@
 # Page Load Performance, Caching & Third-Party Deep-Dive: highcountrypainrelief.com
 
 **Date:** 2026-07-28
-**POCs:** James David Enman (jdaviddenman@gmail.com) | Amy Denman (amydenman@gmail.com)
+**POCs:** James David Enman | Amy Denman
 
 ---
 

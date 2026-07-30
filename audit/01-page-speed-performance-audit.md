@@ -3,7 +3,7 @@
 **Date:** 2026-07-28 | **Platform:** WordPress 7.0.2 + Beaver Builder 2.10.3 + Beaver Themer 1.5.3.2 + BB Theme 1.7.19.2
 **Server:** LiteSpeed on AWS EC2 (44.223.213.21). No CDN. Static asset caching: 30-day max-age (correct). HTML page caching: absent (every request hits PHP). No cache plugin installed. No HTML compression.
 
-**POCs:** James David Enman (jdaviddenman@gmail.com) | Amy Denman (amydenman@gmail.com)
+**POCs:** James David Enman | Amy Denman
 
 ---
 

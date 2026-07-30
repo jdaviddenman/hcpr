@@ -4,8 +4,8 @@ Page speed performance audit, caching analysis, and remediation roadmap for [hig
 
 ## POCs
 
-- **James David Enman** — jdaviddenman@gmail.com
-- **Amy Denman** — amydenman@gmail.com
+- **James David Enman**
+- **Amy Denman**
 
 ## Documents
 
