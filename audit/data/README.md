@@ -1,4 +1,14 @@
-# Header Sweep — Measured Evidence
+# Measured Evidence
+
+| File | Contents |
+|---|---|
+| `header-sweep-2026-07-30.tsv` | GET sweep, 44 sitemap URLs, 14 columns |
+| `header-sweep.sh` | reproducer for the above |
+| `lighthouse-mobile-2026-07-30.md` | full Lighthouse extract, both runs compared |
+
+---
+
+## Header Sweep
 
 **Date:** 2026-07-30 | **Method:** GET (not HEAD) | **Scope:** all 44 URLs in `page-sitemap.xml`
 
@@ -65,7 +75,9 @@ The cache exists and is fast (52-73ms on HIT). Every one of 44 pages was cold on
 
 The audits' recommendation (LSCache crawler to pre-warm) is right; the diagnosis behind it is not. The remediation is **pre-warm + TTL + `Cache-Control` on HTML**, not "install a page cache."
 
-Findings unaffected by this correction, verified live on 2026-07-30: 19 synchronous scripts with 0 `defer` and 0 `async`; 13 stylesheets; `hiking.mp4` 15,343,649 B with a 5,802,541 B `hiking.webm` already present beside it in the same `<video>` source list; 35 eager `i.ytimg.com` thumbnails at 15,585 B each (~532 KB, not the 455 KB stated); 5 Google Font families with no `display=swap`.
+Findings unaffected by this correction, verified live on 2026-07-30: 19 synchronous scripts with 0 `defer` and 0 `async`; 13 stylesheets; `hiking.mp4` 15,343,649 B with a 5,802,541 B `hiking.webm` already present beside it in the same `<video>` source list; 35 eager `i.ytimg.com` thumbnails; 5 Google Font families with no `display=swap`.
+
+**Correction to this file, 2026-07-30:** an earlier revision estimated the YouTube thumbnails at ~532 KB by sampling one thumbnail (15,585 B) and multiplying by 35. The Lighthouse run measures the actual set at **457.8 KiB** — individual thumbnails range from 11.4 to 15.2 KiB, so extrapolating from the largest overstated the total. Use the measured figure.
 
 ## Column reference
 

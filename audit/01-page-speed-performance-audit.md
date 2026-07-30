@@ -1,388 +1,406 @@
 # Page Speed Performance Audit: highcountrypainrelief.com
 
-**Date:** 2026-07-28 | **Platform:** WordPress 7.0.2 + Beaver Builder 2.10.3 + Beaver Themer 1.5.3.2 + BB Theme 1.7.19.2
-**Server:** LiteSpeed on AWS EC2 (44.223.213.21). No CDN. Static asset caching: 30-day max-age (correct). HTML page caching: absent (every request hits PHP). No cache plugin installed. No HTML compression.
+**Date:** 2026-07-30 (supersedes 2026-07-28) | **Platform:** WordPress 7.0.2 + Beaver Builder 2.10.3 + Beaver Themer 1.5.3.2 + BB Theme 1.7.19.2
+**Server:** LiteSpeed on AWS EC2 (44.223.213.21). No CDN. Server-level page cache active but cold on most pages. Static assets: Brotli + 30-day `max-age`. HTML: Brotli, no `Cache-Control`.
+
+**Evidence:** `audit/data/lighthouse-mobile-2026-07-30.md`, `audit/data/header-sweep-2026-07-30.tsv`
 
 ---
 
 ## 1. Executive Summary
 
-The site scores **27/100 on mobile Lighthouse and 47/100 on desktop** — both in the "poor" range (0-49). This is driven by four root causes, all server and configuration issues: no page caching, no text compression, 33 render-blocking resources (19 scripts, 13 stylesheets, 1 font CSS), and a 14.9 MB background video that blocks Largest Contentful Paint.
+The site scores **21/100 on mobile Lighthouse** (2026-07-30 run; a 2026-07-28 run of the same unchanged site scored 27). The problem is **not** the server, and it is **not** compression or caching, both of which were misdiagnosed in the superseded version of this audit. It is one element and one main thread.
 
-The 20-point mobile-desktop delta confirms these are **architectural problems, not device-specific.** Even on unthrottled desktop CPU the site cannot break 50/100. The site's on-page content, keyword targeting, and schema markup are functional — this audit focuses exclusively on load performance.
+**Largest Contentful Paint is 18.9 s, and 83% of that — 15,760 ms — is Load Delay on a single hero background video.** Time to First Byte is 700 ms and accounts for 4%. The browser cannot begin loading the LCP element until the render-blocking chain clears, and when it finally does, the element is a `<video>` whose `poster` attribute is a 1×1 transparent GIF, so there is nothing to paint early.
 
-**Key metrics:**
+**Main-thread work totals 36.9 s**, of which 16.3 s is script evaluation. Total Blocking Time is 14,710 ms against a 200 ms threshold.
 
-| Metric | Mobile | Desktop | Threshold | Status |
-|--------|--------|---------|-----------|--------|
-| Performance Score | 27/100 | 47/100 | 90+ | FAIL |
-| LCP | 15.9s | — | <2.5s | 6.4x over |
-| TBT | 18,520ms | — | <200ms | 92x over |
-| CLS | 0.184 | 0.184 | <0.1 | FAIL |
-| FCP | 3.0s | — | <1.8s | 1.7x over |
-| TTFB | 2,540ms | 2,540ms | <800ms | 3x over |
-| SI | 17.2s | — | <3.4s | 5x over |
-| Page weight | 16,558 KB | — | — | 14.9 MB of it is one video |
+**The three fixes that matter:**
 
-**Three critical issues:**
+1. **Give the hero video a real poster and explicit dimensions.** The `poster` is currently `data:image/gif;base64,R0lGODlhAQABA…` — a 1×1 pixel. A real poster frame makes the LCP element paintable as soon as it is discovered instead of waiting on 15.3 MB of MP4, and explicit `width`/`height` eliminates **100% of the CLS score** (all 0.184 comes from this one element).
+2. **Cut main-thread JS.** `2-layout.js` costs 10,883 ms CPU, UserWay 5,363 ms, GTM 1,448 ms.
+3. **Defer the third parties.** UserWay blocks 2,443 ms, **Google Tag Manager blocks 1,165 ms** — GTM was previously dismissed as "already async, OK" and is in fact the second-largest third-party blocker at 275 KiB.
 
-1. **No page caching + no text compression** — TTFB 2,540ms. Every page load hits uncached PHP. 216 KB of HTML served uncompressed. Zero `Cache-Control` on HTML responses.
-2. **14.9 MB background video blocks LCP** — `hiking.mp4` from inceptionimages.com. 80% of LCP (12,730ms) is load delay — the browser cannot discover the video element until all render-blocking resources finish.
-3. **33 render-blocking resources + 3,242ms UserWay widget** — Zero scripts use `async` or `defer`. All 19 scripts and 13 stylesheets load synchronously. UserWay accessibility widget alone blocks the main thread for 3,242ms.
-
-**Projected outcome after remediation:**
-
-| Phase | Mobile Score | Desktop Score | Time |
-|-------|-------------|---------------|------|
-| Config-only (cache + compress + defer) | 40-50 | 55-65 | 3-4 hrs |
-| + Video replacement + CDN | 50-60 | 65-75 | +4 hrs |
-| + Third-party elimination/facade | 60-68 | 75-85 | +2 hrs |
-
-These projections are estimates based on comparable Beaver Builder site optimizations. 70+ mobile typically requires DOM reduction and theme-level changes beyond config scope. Page speed is a minor ranking signal per Google's documented position; the primary benefit is user experience, conversion rate, and Core Web Vitals compliance.
+**On measurement uncertainty:** two Lighthouse runs of the identical, unmodified site produced a 6-point score spread, a 3.0 s LCP spread, a 3,810 ms TBT spread, and a 3.2× spread in reported payload. Every figure in this document is a single-run measurement unless stated otherwise. Treat differences smaller than those spreads as noise, and re-measure with at least 3 runs before declaring any fix successful.
 
 ---
 
-## 2. PageSpeed Cross-Report Synthesis
+## 2. Metrics
 
-### Score Drivers
+| Metric | 2026-07-30 | 2026-07-28 | Threshold | Status |
+|--------|-----------|-----------|-----------|--------|
+| Performance Score | **21** | 27 | 90+ | FAIL |
+| LCP | **18.9 s** | 15.9 s | <2.5 s | 7.6× over |
+| TBT | **14,710 ms** | 18,520 ms | <200 ms | 74× over |
+| CLS | **0.184** | 0.184 | <0.1 | FAIL |
+| FCP | **3.0 s** | 3.0 s | <1.8 s | 1.7× over |
+| Speed Index | **14.1 s** | 17.2 s | <3.4 s | 4.1× over |
+| TTFB (Lighthouse) | **700 ms** | 2,550 ms | <800 ms | **PASS** |
+| Network payload | **5,123 KiB** | 16,558 KiB | — | 62% is one video |
+| DOM elements | **3,197** | 3,178 | <1,500 | 2.1× over |
 
-| Metric | Mobile (27/100) | Desktop (47/100) | Delta Cause |
-|--------|-----------------|-------------------|-------------|
-| FCP | 3.0s | Lower (unthrottled CPU) | 4x CPU throttling |
-| LCP | 15.9s | Lower (unthrottled) | 14.9 MB video + throttled network |
-| TBT | 18,520ms | Significantly lower | JS execution taxed 4x harder |
-| CLS | 0.184 | 0.184 | Same DOM, same layout shifts |
-| SI | 17.2s | Lower (unthrottled) | Network throttling (Slow 4G) |
-| TTFB | 2,540ms | 2,540ms | Same — uncached PHP on both |
+TTFB now passes. The superseded audit built its top-priority finding on a 2,540 ms TTFB; the independent header sweep shows why that number was real but misleading — see M2.
 
-### Common Root Causes (Device-Independent)
+### LCP breakdown
 
-All six root causes affect both mobile and desktop scores equally:
+**Element:** `div.fl-row > div.fl-row-content-wrap > div.fl-bg-video > video`
 
-1. **No page caching** — TTFB 2,540ms on every request regardless of device
-2. **No text compression** — 216 KB HTML served raw (Lighthouse: 39 KB savings identified)
-3. **33 render-blocking resources** — 19 synchronous scripts, 13 synchronous CSS, 1 synchronous font CSS (Lighthouse: 1,470ms estimated savings)
-4. **14.9 MB background video** — 80% of LCP is load delay on `hiking.mp4`
-5. **Third-party main-thread blocking** — UserWay 3,242ms + ReviewWave 523ms + GTM overhead (Lighthouse: 3,400ms estimated savings)
-6. **3,178 DOM elements** — excessive layout/recalc cost, 3 layout shifts contributing to CLS 0.184
+| Phase | % | Timing |
+|---|---|---|
+| TTFB | 4% | 700 ms |
+| **Load Delay** | **83%** | **15,760 ms** |
+| Load Time | 1% | 240 ms |
+| Render Delay | 12% | 2,190 ms |
 
-### Common Opportunities (Lighthouse Audits — Both Scores)
-
-| Audit | Mobile Savings | Desktop Savings | Shared? |
-|-------|---------------|-----------------|---------|
-| Eliminate render-blocking resources | 1,470ms | Proportional | Same chain |
-| Enable text compression | 39 KB | Same | Same resources |
-| Reduce unused CSS | 50 KB | Same | Same stylesheets |
-| Reduce unused JS | 48 KB | Same | Same scripts |
-| Reduce JS execution time | 24.2s | Lower (no throttle) | Same scripts |
-| Defer offscreen images | 758 KB | Same | Same 35+ YouTube thumbnails |
-| Reduce third-party impact | 3,400ms | Lower (no throttle) | Same third-parties |
-| Serve static assets with efficient cache | 128 resources | Same | Same assets |
-| Avoid enormous network payloads | 16,558 KB | Same | Same page weight |
-| Minify JS | 2 KB | Same | Same files |
-| Properly size images | 20 KB | Same | Same images |
-| Avoid legacy JS | 10 KB | Same | Same bundles |
-
-**All 12 opportunities appear in both reports because they are server/config/resource problems, not device-specific conditions.**
-
-### Unified Critical Path
-
-```
-1. LiteSpeed Cache plugin (page cache + CSS/JS minify/combine + Gzip)
-   → Fixes root causes 1, 2, 3 simultaneously
-   → Effort: 2-3 hrs
-   → Projected mobile: 27→40-45 | Projected desktop: 47→58-63
-
-2. Background video → static WebP poster
-   → Fixes root cause 4 (LCP) + partial CLS fix
-   → Effort: 2-4 hrs (BB row background settings + design approval)
-   → Projected mobile: 40-45→48-53 | Projected desktop: 58-63→65-70
-
-3. Defer third-party scripts (UserWay, ReviewWave, YouTube thumbnails)
-   → Fixes root cause 5
-   → Effort: 1-2 hrs
-   → Projected mobile: 48-53→52-57 | Projected desktop: 65-70→70-74
-
-4. CDN + font optimization + remaining hygiene
-   → Fixes root cause 6 (partial — full DOM reduction is theme-level work)
-   → Effort: 2 hrs
-   → Projected mobile: 52-57→58-65 | Projected desktop: 70-74→75-82
-```
+Load Delay is the gap between navigation start and the browser beginning to fetch the LCP resource. At 83% it is the entire story. The video is applied as a Beaver Builder row background, so the `<video>` element is not in the initial HTML — it is constructed after CSS and JS parse, which is why the browser spends 15.8 s not knowing it exists.
 
 ---
 
-## 3. Resource Waterfall — Who's Responsible?
+## 3. Payload — 5,123 KiB
 
-### Page Weight Breakdown
+| Source | KiB | % | Controllable? |
+|---|---|---|---|
+| **inceptionimages.com** | 3,196 | 62.4% | Partial — CDN is agency-managed; the video can be changed |
+| — `hiking.mp4` (transferred) | 3,112 | 60.7% | Yes |
+| — footer booking image | 84 | 1.6% | Yes |
+| **highcountrypainrelief.com** (1st party) | ~910 | ~17.8% | **Yes — full control** |
+| **YouTube thumbnails** (35 × `i.ytimg.com`) | 459 | 9.0% | Yes — facade pattern |
+| **Google Tag Manager** | 275 | 5.4% | Yes — audit container |
+| **UserWay** | 137 | 2.7% | Yes — defer or replace |
+| **AWS S3** (ReviewWave config) | 58 | 1.1% | No — third-party |
+| **Google Fonts** | 57 | 1.1% | Yes — reduce families |
+| **ReviewWave** | 16 | 0.3% | Partial — can defer |
+| **Vimeo** | 15 | 0.3% | Already lazy |
 
-| Category | Size | % of Total | Controllable? |
-|----------|------|------------|---------------|
-| **inceptionimages.com** (images + video) | 14,964 KB | 90.4% | Partial — CDN is agency-managed. Video can be replaced. |
-| **highcountrypainrelief.com** (HTML + CSS + JS + images) | ~400 KB | 2.4% | **Yes — full control** |
-| **YouTube thumbnails** (i.ytimg.com, 35 images) | ~455 KB | 2.7% | Yes — facade pattern |
-| **UserWay** (cdn.userway.org) | 91 KB | 0.5% | Partial — can defer or replace |
-| **ReviewWave** (cdn.reviewwave.com + S3) | 75 KB | 0.5% | Partial — can defer |
-| **Google Fonts** (fonts.gstatic.com) | 57 KB | 0.3% | Yes — reduce families, add font-display |
-| **Vimeo** (i.vimeocdn.com, 1 thumbnail) | 15 KB | 0.1% | Yes — already lazy (lightbox) |
-| **GTM** (googletagmanager.com) | 4 KB | <0.1% | Yes — already async |
-| **YouTube iframes** (not loaded on page load) | 0 KB | — | N/A — already lightbox-deferred |
+**On the video's size.** `curl` reports `content-length: 15343649` (14.6 MiB) for `hiking.mp4`. Lighthouse recorded **3,112 KiB transferred** — the browser aborts the download once enough is buffered, and where it aborts varies per run. The superseded audit reported the full file size as page weight, which is why it claimed a 16,558 KiB payload and "90% of page weight is one file." Both numbers are real; they measure different things. Transfer size is what costs the user.
 
-**One file is 90% of the problem:** `hiking.mp4` at 14,880 KB from `chiro.inceptionimages.com`. Removing or replacing this single file eliminates 90% of page weight and the LCP bottleneck.
-
-### Critical Request Chain (Simplified)
+**A 5.8 MB WebM already exists.** The page's `<video>` lists `hiking.mp4` first and `hiking.webm` second:
 
 ```
-/ (HTML, 216 KB, uncompressed, TTFB 2,540ms)
-├── jquery.min.js (sync, 30 KB) → blocks HTML parser
-├── 12 CSS files (sync, ~130 KB total) → blocks rendering
-│   ├── fonts.googleapis.com CSS (sync, 1.2 KB)
-│   │   └── fonts.gstatic.com woff2 × 5 (no font-display)
-│   └── bootstrap.min.css (sync, 18 KB)
-├── ReviewWave × 3 scripts (sync) → blocks parser
-├── UserWay widget.js (injected sync) → blocks main thread 3,242ms
-├── BB layout.js × 2 (sync, discovered late) → 13.5s execution
-├── hiking.mp4 (CSS background, discovered AFTER all CSS parses) → LCP element
-└── 35 × i.ytimg.com thumbnails (CSS backgrounds, discovered late) → 455 KB
+https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.mp4   15,343,649 B
+https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm   5,802,541 B
 ```
+
+Browsers pick the first supported source. Every modern browser supports WebM. **Reordering these two `<source>` elements cuts 9.5 MB of origin file size with no design change, no new asset, and no re-encode.** This was not identified in the superseded audit.
 
 ---
 
 ## 4. Findings by Criticality
 
-### CRITICAL — Blocking First Paint
+### CRITICAL
 
-**C1: No HTML page caching — TTFB 2,540ms**
+**C1: LCP 18.9 s — hero video has a 1×1 GIF poster and no dimensions**
 
-- **Evidence:** Static assets (CSS, JS, images, fonts) are correctly cached with `max-age=2592000` (30 days). However, HTML responses carry **zero caching headers** — every page load executes WordPress + Beaver Builder + Yoast from scratch. Server is LiteSpeed on AWS EC2 (`44.223.213.21`). No page cache plugin installed. No `x-litespeed-cache` header present. TTFB measured at 2.426-3.811s (varies by 1.4s between runs — uncached PHP execution variance). No CDN layer — both origin domains resolve directly to AWS EC2 IPs.
-- **Impact:** Every page load runs the full WordPress stack. TTFB is 3x the 800ms threshold. All downstream metrics (FCP, LCP, TBT) are gated by this. Note: static assets are NOT the problem — they already have 30-day browser caching.
-- **Fix:** Install and configure LiteSpeed Cache plugin (free, native to LiteSpeed server). This adds server-level HTML page caching that bypasses PHP on cache hit. Enable page cache: 24-hour default TTL, front page 1-hour TTL. Enable ESI for dynamic elements. Add `fl_builder` to URI Excludes to prevent editor breakage. Enable crawler to pre-warm cache. Additionally: add Cloudflare free tier or QUIC.cloud for a CDN layer.
-- **Effort:** 2-3 hours (install, configure, test all page types, BB editor verification).
-- **Projected outcome:** TTFB 2,540ms → 300-500ms on cache hit. LCP improvement ~2,000ms from TTFB reduction alone.
-- **Verification:** `curl -sI https://www.highcountrypainrelief.com/ | grep -i x-litespeed-cache` returns `hit` on second request. TTFB via `curl -w '%{time_starttransfer}'` under 500ms.
+- **Evidence:** LCP element is `div.fl-bg-video > video`. Its markup:
+  ```html
+  <video autoplay loop muted playsinline
+    poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIB…"
+    style="background-image: url('https://www.highcountrypainrelief.com/wp-content/up…')">
+  ```
+  The `poster` is a 1×1 transparent GIF. LCP phases: TTFB 700 ms (4%), **Load Delay 15,760 ms (83%)**, Load Time 240 ms (1%), Render Delay 2,190 ms (12%). The same element is also the sole contributor to CLS 0.184, with Lighthouse's stated root cause "Media element lacking an explicit size."
+- **Impact:** Worst metric on the page and the entire CLS score. Because the poster is a 1×1, there is no early paint — the browser has nothing to show until video data arrives.
+- **Fix, in order of cost:**
+  - **A. Real poster + explicit dimensions** (~30 min). Set `poster` to a genuine frame and add `width`/`height` to the video container. A real poster paints as soon as the element is discovered. `Chronic-Pain-Boone-NC-Hiking.webp` (76,870 B) already exists on the origin and is already referenced as the element's `background-image` — it is a ready-made poster.
+  - **B. Reorder `<source>` to WebM-first** (~15 min). 15.3 MB → 5.8 MB of source file, zero design change.
+  - **C. Replace the video with a static image** (1-2 hrs + design approval). Removes the LCP problem entirely.
+  - **D. Fix the discovery problem** (2-4 hrs). The 15,760 ms Load Delay exists because BB constructs the element after CSS/JS parse. A `<link rel="preload" as="image">` for the poster, emitted in `<head>`, lets the browser fetch it during the blocking window instead of after it.
+  - **Recommended:** A + B together. ~45 minutes, no design decisions, addresses LCP and all of CLS.
+- **Projected outcome:** CLS 0.184 → ~0 (this element is 100% of the score). LCP improvement is real but not precisely predictable from one run — the poster removes the wait on video bytes, but the 15,760 ms discovery delay persists until D or the render-blocking chain (H1) is also addressed.
+- **Verification:** Lighthouse LCP element is the poster image, not the video. CLS ≤ 0.1. `Avoid large layout shifts` no longer lists the video.
 
-**C2: HTML served uncompressed — 216 KB raw (static assets already Brotli-compressed)**
+**C2: Main-thread work 36.9 s — TBT 14,710 ms**
 
-- **Evidence:** Static assets (CSS, JS, fonts) are correctly served with `content-encoding: br` (Brotli). **This is working.** However, the HTML document (216,845 bytes) has **no `Content-Encoding`** regardless of `Accept-Encoding` request header. Lighthouse estimate: 39 KB savings from text compression — the largest component of this is the ReviewWave S3 script (`rw-embed-data.s3.amazonaws.com/6809-a7ea-455a-196e-77a8.js`, 55.3 KB, third-party — not controllable). The HTML itself would compress to ~50-70 KB.
-- **Impact:** 216 KB HTML transferred vs. ~50-70 KB compressed. On Slow 4G (1.6 Mbps), the raw HTML alone takes ~1.1s to download before rendering can begin. Note: this is a smaller fix than initially estimated because static assets are already compressed.
-- **Fix:** Enable Gzip or Brotli for HTML responses via LiteSpeed config or `.htaccess`. LiteSpeed Cache plugin (C1) handles this automatically.
-- **Effort:** 5 minutes (LiteSpeed config). Or: resolved automatically by C1 (LSCache plugin).
-- **Projected outcome:** HTML transfer size reduced by 65-70% when not cached. Combined with page cache (C1): HTML served from cache is pre-compressed and served in <100ms. Note: the 39 KB Lighthouse estimate includes third-party assets the site cannot control.
-- **Verification:** `curl -sI -H 'Accept-Encoding: br' https://www.highcountrypainrelief.com/ | grep -i content-encoding` returns `br`.
+- **Evidence:**
 
-**C3: 14.9 MB background video blocks LCP — 15,940ms**
+  | Category | Time | | Source | Total CPU |
+  |---|---|---|---|---|
+  | Script Evaluation | 16,263 ms | | `cache/2-layout.js` | 10,883 ms |
+  | Other | 10,512 ms | | the HTML document | 10,224 ms |
+  | Parse HTML & CSS | 5,664 ms | | UserWay | 5,363 ms |
+  | Style & Layout | 3,355 ms | | Unattributable | 4,755 ms |
+  | Rendering | 501 ms | | `jquery.min.js` | 1,589 ms |
+  | Script Parse & Compile | 383 ms | | `swiper.min.js` | 1,497 ms |
+  | Garbage Collection | 234 ms | | GTM | 1,448 ms |
 
-- **Evidence:** Lighthouse LCP element: `div.fl-bg-video > video` loading `hiking.mp4` (14,880 KB from chiro.inceptionimages.com). LCP breakdown: TTFB 16% (2,550ms) + Load Delay 80% (12,730ms) + Load Time 1% (140ms) + Render Delay 3% (520ms). 80% is load delay — the browser spends 12.7 seconds discovering this element because all render-blocking CSS/JS must complete first. The video is loaded as a Beaver Builder row background (`data-video-url`) — BB generates an inline `<video>` element that the browser cannot discover until CSS parses.
-- **Impact:** Single largest LCP contributor. 14.9 MB also drives the "enormous network payload" audit (16,558 KB total). 90% of page weight is this one file.
-- **Fix:** Option A (config-only, loses video effect): Replace row background video with static WebP poster via BB row settings. Option B (retains video effect, custom dev): Static poster with click-to-play video overlay. Option C (retains auto-play, custom dev): Self-host compressed video (<2 MB, 720p, `preload="none"`) applied via BB filter hook. **Recommended:** Option A for immediate impact; Option B as follow-up.
-- **Effort:** Option A: 1-2 hours (BB row settings + image selection). Option B: 4-6 hours (custom JS + design approval).
-- **Projected outcome:** LCP 15,940ms → <3,000ms. Page weight 16,558 KB → <2,000 KB. CLS improvement (video was #1 layout shift at 0.184).
-- **Verification:** Lighthouse LCP element no longer shows video element. LCP under 3,000ms. Page weight under 2 MB.
+  20 long main-thread tasks. 5 non-composited animations.
+- **Impact:** TBT is 74× the 200 ms threshold. `2-layout.js` — Beaver Builder's per-page JS bundle — is the single largest first-party cost at 10,883 ms CPU (10,081 ms of it evaluation).
+- **Fix:** Defer non-critical JS (H1). Defer UserWay (H2). Audit the GTM container (H3). `2-layout.js` is BB-generated and cannot be removed without reducing module count on the page — its cost scales with the number of BB modules, of which the 35-video gallery is the largest contributor (max child elements: 105, in `div.pp-video-gallery-items.swiper-wrapper`).
+- **Effort:** 2-3 hrs for deferral. Reducing `2-layout.js` is a page-composition change, not a config change.
+- **Verification:** Lighthouse `Minimize main-thread work` under 20 s. TBT trending down across 3 runs, not 1.
 
-### HIGH — Render-Blocking & Main-Thread
+**C3: CLS 0.184 — one element**
 
-**H1: 33 render-blocking resources — 1,470ms estimated savings**
+- **Evidence:** 3 layout shifts detected. Only one is non-zero:
 
-- **Evidence:** Lighthouse "Eliminate render-blocking resources" audit. 19 external scripts, 13 external stylesheets, 1 Google Fonts CSS — all loaded synchronously. Zero scripts have `async` or `defer`. Largest contributors: Amazon S3 script 1,480ms, jQuery 450ms, BB layout-bundle.css 300ms, BB page-layout.css 450ms, ReviewWave reviews_embed.js 830ms, Google Fonts CSS 810ms.
-- **Impact:** FCP 3.0s. Browser cannot paint until all 33 resources in the critical path download and parse. 1,470ms of this is avoidable by deferring or inlining.
-- **Fix:** LiteSpeed Cache plugin: enable CSS minify + combine (reduce 13 CSS → 1-2 files). Enable JS minify (combine OFF initially — BB editor breaks with JS combine). Enable JS defer for non-critical scripts. Exclude from defer: `jquery.js`, `layout.js`, `bxslider.js` (BB slider dependency). Exclude `fl_builder` from URI optimization entirely. Inline critical CSS via LSCache's QUIC.cloud integration (free tier).
-- **Effort:** 1-2 hours (with LSCache plugin installed from C1).
-- **Projected outcome:** FCP 3.0s → ~1.5s. Render-blocking audit clears.
-- **Verification:** Lighthouse "Eliminate render-blocking resources" shows ≤200ms estimated savings.
+  | # | Element | Score | Root cause |
+  |---|---|---|---|
+  | 1 | `div.fl-bg-video > video` | **0.184** | Media element lacking an explicit size |
+  | 2 | "New Patient Special Offer" button | 0.000 | Web fonts loaded (2 × woff2) |
+  | 3 | `img.rws-chat-img` "agent portrait" (ReviewWave) | 0.000 | Media element lacking an explicit size |
+- **Impact:** Fails Core Web Vitals. The entire score is shift #1.
+- **Fix:** Explicit `width`/`height` on the hero video container — the same edit as C1 Option A. Shifts #2 and #3 score 0.000 and need no action; `&display=swap` on the fonts URL (M5) is worth doing for FCP reasons, not CLS.
+- **Effort:** 15 minutes, combined with C1.
+- **Verification:** Lighthouse CLS ≤ 0.1. `Avoid large layout shifts` lists no non-zero shift.
 
-**H2: UserWay widget — 3,242ms main-thread blocking**
+### HIGH
 
-- **Evidence:** Lighthouse "Reduce third-party impact." UserWay total: 91 KB, 3,242ms main-thread blocking. `widget_app_base_178...js` (47 KB) = 3,208ms alone. `widget_base.css` (27 KB) = 32ms. UserWay is injected via inline script in the body — it loads synchronously as a dynamically created `<script>` element with `data-account='Vgm0gbMRdF'`.
-- **Impact:** UserWay accounts for 17% of TBT (18,520ms) despite being 0.5% of page weight. The widget loads regardless of whether a visitor needs accessibility features. For the 95%+ of visitors who do not interact with it, this is wasted main-thread time.
-- **Fix:** Load UserWay via `requestIdleCallback` or with a user-initiated trigger ("Accessibility" button). Replace inline injection script with:
+**H1: 11 render-blocking resources — 1,370 ms estimated savings**
+
+- **Evidence:** Lighthouse "Eliminate render-blocking resources" lists **11** resources:
+
+  | Group | Count | Transfer | Est. savings |
+  |---|---|---|---|
+  | highcountrypainrelief.com | 7 | 104.3 KiB | 1,950 ms |
+  | `rw-embed-data.s3.amazonaws.com` | 1 | 55.7 KiB | 1,570 ms |
+  | `cdn.reviewwave.com` | 2 | 11.5 KiB | 940 ms |
+  | `fonts.googleapis.com` | 1 | 1.2 KiB | 790 ms |
+
+  First-party detail: `jquery.min.js` 450 ms, `2-layout.css` 450 ms, `bootstrap.min.css` 300 ms, `layout-bundle.css` 300 ms, `all.min.css` 150 ms, `skin-*.css` 150 ms, `jquery.fancybox.min.css` 150 ms.
+
+  **Correction to the superseded audit:** it claimed "33 render-blocking resources (19 scripts, 13 stylesheets, 1 font CSS)." The page does contain 19 scripts and 13 stylesheets — verified by source inspection, with zero `async` and zero `defer` on any of them — but Lighthouse flags only 11 as render-blocking. The figure 33 is from a *different* audit: "Avoid chaining critical requests — 33 chains found."
+- **Impact:** FCP 3.0 s. The single largest blocker is a third-party script (ReviewWave's S3 config, 1,570 ms) that the site does not control except by deferring it.
+- **Fix:** Add `defer` to `chat_embed.js`, `reviews_embed.js`, and the S3 config script — none are needed before first paint. Add `&display=swap` to the Google Fonts URL and preconnect to `fonts.gstatic.com`. For first-party CSS, combine the four BB/theme stylesheets. Keep `jquery.min.js` synchronous unless every page interaction is regression-tested — many plugins hard-depend on `$` at parse time.
+- **Effort:** 1-2 hrs.
+- **Verification:** Lighthouse render-blocking savings ≤ 200 ms.
+
+**H2: UserWay — 2,443 ms main-thread blocking, 137 KiB**
+
+- **Evidence:** `widget_app_base_178….js` (47 KiB) blocks 2,354 ms; `widget_base.css` (71 KiB) blocks 87 ms; `widget.js` (2 KiB) 2 ms. Total CPU across UserWay is 5,363 ms. Injected via inline script with `data-account='Vgm0gbMRdF'`.
+- **Impact:** Largest single third party. 64% of all third-party blocking time, for 3.3% of payload. Loads for every visitor regardless of whether accessibility features are used.
+- **Fix:** Load on idle rather than during parse:
   ```js
-  requestIdleCallback(function() {
+  (window.requestIdleCallback || function (cb) { setTimeout(cb, 2000); })(function () {
     var s = document.createElement('script');
     s.src = 'https://cdn.userway.org/widget.js';
     s.setAttribute('data-account', 'Vgm0gbMRdF');
-    s.defer = true;
     document.body.appendChild(s);
   });
   ```
-- **Effort:** 30 minutes (edit inline script in BB global footer or child theme).
-- **Projected outcome:** TBT reduction ~3,000ms (UserWay shifts to idle periods). Lighthouse "Reduce third-party impact" shows UserWay under 200ms.
-- **Verification:** Chrome DevTools Performance tab: UserWay scripts load after First Input Delay window. Lighthouse third-party audit passes.
+  Note: dynamically-created scripts are async by default — setting `.defer = true` on one is a no-op, which is what the superseded audit's snippet did. The fallback wrapper covers browsers without `requestIdleCallback`.
+- **Effort:** 30 minutes.
+- **Projected outcome:** ~2,400 ms shifted out of the TBT window. It is shifted, not eliminated — the CPU cost is still paid, just after interactivity.
+- **Verification:** Lighthouse third-party audit shows UserWay under 200 ms blocking.
 
-**H3: CLS 0.184 — video + fonts + un-sized elements**
+**H3: Google Tag Manager — 1,165 ms blocking, 275 KiB**
 
-- **Evidence:** Lighthouse "Avoid large layout shifts." 3 layout shifts detected:
-  1. `div.fl-bg-video > video` — 0.184 (the background video, missing explicit dimensions)
-  2. "New Patient Special Offer" button — 0.000 (minor, but late-appearing)
-  3. Web fonts loading (woff2 × 3 from fonts.gstatic.com) — 0.000 each (late text reflow)
-  Additional "Image elements do not have explicit width and height" diagnostic flags multiple images. "Media element lacking an explicit size" flags the hero video.
-- **Impact:** CLS 0.184 exceeds the 0.1 Core Web Vitals threshold. The video element is the primary cause.
-- **Fix:** Add explicit `width` and `height` dimensions to the hero video container (or its static poster replacement from C3). Add `font-display: swap` to Google Fonts URL (`&display=swap`). Add explicit `width`/`height` attributes to images flagged in the audit.
-- **Effort:** 1 hour.
-- **Projected outcome:** CLS 0.184 → ≤0.1 (passes Core Web Vitals). Remaining shifts from ReviewWave/chat widget injection may persist — verify after fix.
-- **Verification:** Lighthouse CLS audit shows 0 (or ≤0.1). Chrome DevTools Performance tab: zero "Layout Shift" markers above 0.1.
+- **Evidence:** `gtm.js?id=GTM-WGXQKR5` — 115 KiB, 831 ms blocking. `gtag/js?id=G-CW4KKYCP1V` — 159 KiB, 334 ms blocking. Total CPU 1,448 ms.
+- **Impact:** Second-largest third-party blocker and the **largest third-party payload after the image CDN** at 275 KiB — more than UserWay and ReviewWave combined. The superseded audit listed GTM as "4 KB, minimal, already async — OK, 0 savings," which understated its transfer size by roughly 70× and missed its blocking cost entirely.
+- **Fix:** GTM's loader being async does not make its *contents* cheap — 275 KiB indicates a container with many tags. Audit the container: remove unused tags, unfired triggers, and duplicate analytics. If both GA4 (`G-CW4KKYCP1V`) and other tags load the gtag library, deduplicate. Consider server-side tagging if the container cannot be slimmed.
+- **Effort:** 1-2 hrs (container audit, not a code change).
+- **Verification:** GTM transfer under 100 KiB; blocking under 300 ms.
 
-### MEDIUM — Payload & Resource Efficiency
+**H4: 758 KiB of offscreen images loaded eagerly**
 
-**M1: 3,178 DOM elements — excessive layout cost**
+- **Evidence:** Lighthouse "Defer offscreen images" — 758.5 KiB across four groups:
 
-- **Evidence:** Lighthouse "Avoid an excessive DOM size" diagnostic. 3,178 elements vs. recommended <1,500. Desktop and mobile navigation trees both present in the DOM. 35 YouTube thumbnail containers. Duplicate navigation in footer.
-- **Impact:** Style recalculation: 3,420ms. Layout: 6,462ms. Parse HTML & CSS: 6,462ms. Each DOM mutation triggers more recalculation work. Particular issue on mobile where CPU is throttled 4x.
-- **Fix:** Consolidate desktop + mobile nav into a single responsive navigation (BB theme setting). Reduce footer widget areas. Lazy-load YouTube thumbnail containers via facade (see M2). Replace redundant DOM sections with CSS visibility toggles instead of duplicate markup.
-- **Effort:** 3-4 hours (nav consolidation + footer reduction + facade). More if theme-level changes are needed.
-- **Projected outcome:** DOM <2,000 elements. Style recalculation reduced by ~30%.
-- **Verification:** Lighthouse DOM element count under 2,000.
+  | Group | KiB |
+  |---|---|
+  | YouTube — 35 thumbnails via `i.ytimg.com` | 457.8 |
+  | highcountrypainrelief.com — 5 images | 202.4 |
+  | inceptionimages.com — 1 image | 83.6 |
+  | Vimeo — 1 thumbnail | 14.7 |
 
-**M2: 35+ YouTube thumbnails loaded eagerly — 758 KB deferred**
+  The YouTube thumbnails are CSS `background-image` on `div.pp-video-image-overlay`, so `loading="lazy"` does not apply to them. `i.ytimg.com` serves `cache-control: public, max-age=7200` (2 hours, verified by `curl`). The five first-party images are `<img>` tags that could take `loading="lazy"` directly: Knee-Pain-Red 53.6 KiB, Woman-With-Shoulder-Pain 50.8 KiB, Back-Pain 43.5 KiB, Neuropathy 40.8 KiB, ASMST-Logo 13.7 KiB.
 
-- **Evidence:** Lighthouse "Defer offscreen images" audit: 758 KB estimated savings. 35 `<div class="pp-video-image-overlay">` elements with inline `background-image: url(i.ytimg.com/.../hqdefault.jpg)`. These are CSS backgrounds, so `loading="lazy"` does not apply. YouTube CDN thumbnails have `max-age=7200` (2 hours, verified via `curl -sI`). After expiry, browsers revalidate with conditional requests (304 Not Modified), but each of 35 revalidations costs RTT. On first visit or cache miss: 35 × ~13 KB = 455 KB downloaded.
-- **Impact:** 35 HTTP requests for below-fold video thumbnails. 455 KB on cache miss. On Slow 4G: ~2.3s additional download time.
-- **Fix:** YouTube facade pattern — replace each `pp-video-image-overlay` div with a click-to-load placeholder. Recommended: `lite-youtube-embed` web component (~4 KB JS + CSS, zero dependencies, Apache-2.0 by Paul Irish). Load JS/CSS once via child theme, stamp `<lite-youtube videoid="...">` tags via BB HTML modules. On click: replaces itself with actual YouTube iframe. WP YouTube Lyte plugin alternative: 30,000+ installs, local thumbnail caching option, `[lyte]` shortcode. Either approach: zero i.ytimg.com requests until user click.
-- **Effort:** 2-3 hours for manual HTML module replacement (35 instances). 6-10 hours if building a reusable BB custom module. WP YouTube Lyte plugin: 1-2 hours if shortcodes work via BB text modules.
-- **Projected outcome:** 455 KB deferred per page load. Zero i.ytimg.com requests until first click. Lighthouse "Defer offscreen images" fully resolved.
-- **Verification:** Network tab in DevTools: zero requests to `i.ytimg.com` on initial page load. Requests appear only after clicking a video thumbnail.
+  **Correction:** the superseded audit reported this finding as "758 KB" in its heading and "455 KB" in its evidence without reconciling them. 758 KiB is the total across all offscreen images; YouTube is 457.8 KiB of it.
+- **Fix:** Two independent fixes. (a) Add `loading="lazy"` to the 5 first-party `<img>` tags — 202 KiB for ~10 minutes of work. (b) YouTube facade for the 35 thumbnails: `lite-youtube-embed` (~3 KiB JS + ~1 KiB CSS, Apache-2.0, no dependencies) replaces each overlay div with a click-to-load placeholder, so `i.ytimg.com` is never contacted until a user clicks. See `audit/03-page-load-caching-deep-dive.md` §3.
+- **Effort:** (a) 10 min. (b) 2-3 hrs for 35 manual replacements, or 1-2 hrs via the WP YouTube Lyte plugin if its shortcode renders inside BB text modules.
+- **Verification:** Network tab shows zero `i.ytimg.com` requests on load. Lighthouse "Defer offscreen images" savings under 100 KiB.
 
-**M3: No font-display — FOIT on 5 font families**
+### MEDIUM
 
-- **Evidence:** Google Fonts CSS serves 5 `@font-face` blocks (Raleway, Work Sans, Inter, Audiowide, Oxygen) with zero `font-display` declarations. This is the Google Fonts default. Lighthouse "Ensure text remains visible during webfont load" audit fails. Fonts.gstatic.com files are well-cached (`max-age=31536000`, 1 year) but the lack of `font-display: swap` causes text to remain invisible until fonts download on slow connections.
-- **Impact:** FOIT (Flash of Invisible Text) on first visit or cache miss. For 5 font families being downloaded, text may be invisible for 1-3 seconds on Slow 4G. Contributes to CLS when fonts finally render and text reflows.
-- **Fix:** Add `&display=swap` parameter to Google Fonts URL. Additionally: reduce from 5 font families to 2 (one heading, one body) and remove unused font weights. Self-host the reduced font set via LSCache's font optimization.
-- **Effort:** 15 minutes (add `&display=swap`). 1 hour (reduce + self-host).
-- **Projected outcome:** Text visible immediately using fallback fonts. CLS reduction from font reflow. Font payload reduction ~57 KB → ~25 KB.
-- **Verification:** Google Fonts URL includes `&display=swap`. Lighthouse "Ensure text remains visible" passes.
+**M1: 3,197 DOM elements**
 
-**M4: No CDN — both domains serve from AWS EC2 origin**
+- **Evidence:** Lighthouse "Avoid an excessive DOM size": 3,197 elements against a <1,500 recommendation. Max depth 28 (`div.pp-video-play-icon > svg > g > path`). Max child elements 105, in `div.pp-video-gallery-items.swiper-wrapper` — the 35-video gallery. Style & Layout costs 3,355 ms; Parse HTML & CSS 5,664 ms.
+- **Impact:** Drives both the parse cost and the size of `2-layout.js` (C2). The video gallery is the densest single structure on the page.
+- **Fix:** The facade in H4 removes markup as well as requests. Consolidate duplicated desktop/mobile navigation into one responsive nav. Reduce footer widget areas.
+- **Effort:** 3-4 hrs; more if theme-level changes are required.
+- **Verification:** DOM under 2,500 as a realistic first target.
 
-- **Evidence:** DNS resolution: `highcountrypainrelief.com` → `44.223.213.21` (AWS EC2), `chiro.inceptionimages.com` → `18.214.60.67` (AWS EC2). Both IPs run LiteSpeed directly. No CDN headers present (`cf-cache-status`, `x-cache`, `age`, `via`, `x-amz-cf-id`). No proxy layer. Static assets are served from origin with 30-day browser cache — this is working correctly for repeat visitors. First-time visitors and geographically distant users experience full origin latency. The `dns-prefetch` for `fonts.googleapis.com` should be upgraded to `preconnect` — currently costs ~1 RTT on every font CSS request.
-- **Impact:** Geographically distant visitors experience higher latency. Origin handles all traffic. No edge caching for static assets (browser cache works for repeat visits, but each unique visitor's first load hits origin). The `dns-prefetch` vs `preconnect` gap wastes ~100ms on font loads.
-- **Fix:** Add Cloudflare free tier or QUIC.cloud (LiteSpeed native, free tier). Change `dns-prefetch //fonts.googleapis.com` to `<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>`. If using Cloudflare: enable Brotli, Auto Minify, set Browser Cache TTL to 1 year. Note: this is complementary to LSCache page caching (C1) — CDN caches at the edge, LSCache caches at the server.
-- **Effort:** 30 minutes (preconnect). 1-2 hours (CDN setup + DNS).
-- **Projected outcome:** Edge TTFB <100ms for cached assets. Reduced origin load. Static asset edge caching improves first-visit performance globally.
-- **Verification:** CDN headers present in response. `preconnect` link tag visible in source. DNS resolves to CDN edge IPs instead of origin IPs.
+**M2: Page cache is active but cold — first visitor to any page pays 0.4-2.7 s**
 
-### LOW — Hygiene
+- **Evidence:** GET sweep of all 44 sitemap URLs (`audit/data/header-sweep-2026-07-30.tsv`):
 
-**L1: 5 Google Font families with unused weights — 57 KB**
+  ```
+  cache state    44/44  MISS on 1st request, HIT on 2nd
+  cache-control  44/44  absent on HTML
+  TTFB MISS      min 0.406  median 0.845  mean 1.204  p90 2.277  max 2.654 s
+  TTFB HIT       min 0.052  mean  0.059                          max 0.073 s
+                                                            ratio 20.2x
+  ```
 
-- **Evidence:** Raleway (700, 400, 300, 800, 600), Work Sans (700), Inter (600), Audiowide (400), Oxygen (300, 700). Many weights unused on the page. Self-hosting not in use.
-- **Fix:** Audit actual usage via Chrome DevTools CSS Overview. Reduce to 2 families (Raleway + Work Sans). Self-host via LSCache font optimization. Remove Audiowide, Inter, Oxygen.
-- **Effort:** 1 hour.
-- **Verification:** ≤2 font families in Google Fonts URL or self-hosted CSS.
+  Slowest on MISS: `/hipaa-privacy-policy/` 2.654 s, `/accessibility/` 2.537 s, `/pain-management-center/` 2.460 s, `/terms-service/` 2.408 s, `/knee-pain-lp/` 2.317 s.
 
-**L2: `.jpg.webp` double extension — MIME confusion risk**
+  Server-level LiteSpeed caching is active. The LiteSpeed Cache **WordPress plugin** is not installed (`wp-content/plugins/litespeed-cache/*` returns 404). HTML ETags are present and change as cache entries regenerate.
 
-- **Evidence:** `Chronic-Pain-Boone-NC-SoftWave-Video-Overlay.jpg.webp` — `.jpg` before `.webp` may cause some servers/CDNs to serve `image/jpeg` MIME type instead of `image/webp`.
-- **Fix:** Rename to `.webp` only. Verify MIME type in response headers.
-- **Effort:** 5 minutes.
-- **Verification:** `curl -sI [url] | grep content-type` returns `image/webp`.
+  **Correction:** the superseded audit reported "no page caching, TTFB 2,540 ms on every request." The 2,540 ms figure is real — it sits near the p95 of the MISS distribution — but it is the *cold-cache* path, not every request. Warm requests are 52-73 ms. Lighthouse's own TTFB in the current run is 700 ms and passes.
+- **Impact:** Low traffic means most pages are cold when a real visitor arrives, so real users routinely pay the MISS path. With no `Cache-Control` on HTML, no visitor ever caches the document browser-side either.
+- **Fix:** Pre-warm and hold. Install the LiteSpeed Cache plugin for its crawler, point it at `page-sitemap.xml`, and raise the public TTL so entries survive between visits. Separately, emit `Cache-Control` on HTML responses. Add `fl_builder` to URI Excludes before enabling any page optimization, or the BB editor breaks.
+- **Effort:** 2-3 hrs including BB editor verification.
+- **Projected outcome:** MISS rate falls toward zero for sitemap URLs; TTFB converges on the 52-73 ms HIT path.
+- **Verification:** Re-run `audit/data/header-sweep.sh`; first-pass `lsc1` column should read `hit` for most URLs rather than `miss` for all 44.
 
-**L3: 6 images missing `loading="lazy"` — ~200 KB above-fold waste**
+**M3: 197 resources flagged for inefficient cache policy**
 
-- **Evidence:** 22 `<img>` tags: 16 have `loading="lazy"`, 6 do not. Missing: logo, ASMST logo, video overlay thumbnail, 4 condition images. Some of these are above-fold (logo, hero image — correct to not lazy-load). Others (ASMST logo in footer, condition images mid-page) are below-fold and should be lazy.
-- **Fix:** Add `loading="lazy"` to below-fold images missing it. Add `decoding="async"` for offscreen images.
-- **Effort:** 10 minutes.
-- **Verification:** All below-fold `<img>` tags include `loading="lazy"`.
+- **Evidence:** Lighthouse "Serve static assets with an efficient cache policy": 197 resources. First-party static assets carry `cache-control: public, max-age=2592000` (30 days) plus Brotli — verified on 4 sampled CSS/JS files — so the bulk of the 197 are third-party (YouTube's 2-hour TTL on 35 thumbnails, GTM's ~15-minute TTL, UserWay's 1-hour TTL).
+- **Impact:** Mostly not controllable. The controllable part is the 35 YouTube thumbnails, which the H4 facade eliminates outright.
+- **Fix:** H4 facade. Optionally raise first-party `max-age` to 1 year, but only if hash-based cache-busting is verified end-to-end — BB uses `?ver=` query strings, and some CDNs strip query strings.
+- **Effort:** Covered by H4.
 
-**L4: No ETag headers — cache revalidation uses Last-Modified only**
+**M4: 127 KiB unused JavaScript**
 
-- **Evidence:** Static assets return `last-modified` and `expires` but no `ETag`. Conditional revalidation relies solely on `If-Modified-Since`, which has 1-second granularity.
-- **Fix:** LiteSpeed Cache plugin adds ETag support automatically. Or: enable ETag in LiteSpeed config.
-- **Effort:** Resolved by C1 (LSCache plugin installation).
-- **Verification:** `curl -sI [static-asset-url] | grep -i etag` returns ETag value.
+- **Evidence:** Lighthouse "Reduce unused JavaScript": 127 KiB. Legacy JS served to modern browsers: 7 KiB.
+- **Fix:** Largely a consequence of GTM container size (H3) and BB module bundling. Address H3 first and re-measure.
+- **Effort:** Covered by H3.
+
+**M5: No `font-display` — 5 font families**
+
+- **Evidence:** `fonts.googleapis.com/css?family=Raleway:700,400,300,800,600|Work%20Sans:700|Inter:600|Audiowide:400|Oxygen:300,700` — no `display` parameter, confirmed in live page source. Lighthouse "Ensure text remains visible during webfont load" fails. Font files are 57 KiB and cached 1 year at `fonts.gstatic.com`. Web font loading is the stated root cause of layout shift #2 (which scores 0.000).
+- **Fix:** Append `&display=swap`. Reduce from 5 families to 2. Upgrade the existing `dns-prefetch` for `fonts.googleapis.com` to `<link rel="preconnect" crossorigin>`.
+- **Effort:** 15 min for `display=swap` and preconnect; 1 hr to reduce families.
+- **Verification:** Fonts URL contains `display=swap`; Lighthouse webfont audit passes.
+
+**M6: No CDN**
+
+- **Evidence:** `highcountrypainrelief.com` → `44.223.213.21`; `chiro.inceptionimages.com` → `18.214.60.67`. Both AWS EC2, both LiteSpeed, no CDN headers (`cf-cache-status`, `x-cache`, `age`, `via`, `x-amz-cf-id`) on any response. These are two distinct hosts, not one origin.
+- **Impact:** Geographically distant visitors pay full origin latency. Given TTFB on a warm cache is already 52-73 ms from the test location, this is a lower priority than it appears.
+- **Fix:** Cloudflare free tier or QUIC.cloud. Complementary to M2, not a substitute.
+- **Effort:** 1-2 hrs.
+
+### LOW
+
+**L1: Static assets have no ETag**
+
+- **Evidence:** 4 sampled static assets (2 CSS, 2 JS) return `cache-control: public, max-age=2592000`, `expires`, `last-modified`, `content-encoding: br` — and no `etag`. Revalidation depends on `If-Modified-Since`, which has 1-second granularity.
+- **Fix:** Enable ETag in LiteSpeed config, or as a side effect of installing the LSCache plugin (M2).
+- **Verification:** `curl -sI <static-asset-url> | grep -i etag` returns a value.
+
+**L2: One oversized image — 20 KiB**
+
+- **Evidence:** `Best-of-W….webp`, 84.8 KiB transferred, 19.9 KiB of it unnecessary at rendered size.
+- **Fix:** Regenerate at display dimensions.
+
+**L3: `.jpg.webp` double extension**
+
+- **Evidence:** `Chronic-Pain-Boone-NC-SoftWave-Video-Overlay.jpg.webp`. Some servers and CDNs key MIME type on the first extension.
+- **Fix:** Rename to `.webp`. Verify `content-type: image/webp`.
+
+**L4: Images missing explicit width and height**
+
+- **Evidence:** Lighthouse "Image elements do not have explicit width and height" fails. Distinct from C3 — these contribute 0.000 to CLS in this run but are latent shift sources.
+- **Fix:** Add `width`/`height` attributes.
+
+**L5: 5 non-composited animations**
+
+- **Evidence:** Lighthouse "Avoid non-composited animations": 5 animated elements. Animations not on the compositor thread force main-thread work per frame, compounding C2.
+- **Fix:** Restrict animation to `transform` and `opacity`.
 
 ---
 
-## 5. Third-Party Script Deferral Strategy
+## 5. Third-Party Deferral Strategy
 
-| Script | Source | Current Load | Main-Thread Time | Recommended | Projected Saving |
-|--------|--------|-------------|------------------|-------------|-----------------|
-| UserWay widget.js | cdn.userway.org | Injected sync via inline `<script>` | 3,242ms | `requestIdleCallback` or user-triggered | ~3,000ms TBT |
-| ReviewWave chat_embed.js | cdn.reviewwave.com | Sync `<script>` in `<head>` | 97ms | `defer` — chat is non-critical | ~100ms TBT |
-| ReviewWave reviews_embed.js | cdn.reviewwave.com | Sync `<script>` in `<head>` | 426ms | `defer` — reviews below-fold | ~430ms TBT |
-| ReviewWave config | rw-embed-data.s3.amazonaws.com | Sync `<script>` in `<head>` | Minimal | `defer` — config data only | Negligible |
-| GTM | googletagmanager.com | Inline + async iframe | Minimal | Already async — OK | 0 |
-| Vimeo iframes | player.vimeo.com | Inline templates (lightbox) | 0 until click | Already lazy — OK | 0 |
-| YouTube iframes | youtube.com | 35 inline templates (lightbox) | 0 until click, but 455 KB thumbnails loaded eagerly | Facade pattern (Audit #3) | 455 KB deferred |
-| jQuery 3.7.1 | WP core | Sync in `<head>` | 996ms | Keep sync or defer with careful testing | Uncertain — many plugins hard-depend on `$` |
-| BB layout.js × 2 | bb-plugin/cache/ | Sync in `<body>` | 13,467ms (throttled) | `defer` — page-specific, no above-fold JS needed | ~5,000ms TBT (shifts execution out of critical path, does not eliminate it) |
-| BB theme.min.js | BB Theme | Sync in `<body>` | Minimal | `defer` | <50ms |
+| Script | Source | Current load | Blocking | Transfer | Recommended |
+|---|---|---|---|---|---|
+| UserWay `widget_app_base` | cdn.userway.org | inline-injected | **2,354 ms** | 47 KiB | `requestIdleCallback` |
+| UserWay `widget_base.css` | cdn.userway.org | injected | 87 ms | 71 KiB | loads with widget |
+| **GTM `gtm.js`** | googletagmanager.com | async | **831 ms** | 115 KiB | audit container |
+| **GTM `gtag/js`** | googletagmanager.com | async | **334 ms** | 159 KiB | deduplicate |
+| ReviewWave `reviews_embed.js` | cdn.reviewwave.com | sync `<head>` | 117 ms | 4 KiB | `defer` — below fold |
+| ReviewWave `chat_embed.js` | cdn.reviewwave.com | sync `<head>` | 11 ms | 7 KiB | `defer` — non-critical |
+| ReviewWave config | rw-embed-data.s3… | sync `<head>` | 14 ms | 56 KiB | `defer` — 1,570 ms render-block |
+| YouTube thumbnails | i.ytimg.com | eager CSS bg | 0 ms | 459 KiB | facade (H4) |
+| Vimeo thumbnail | i.vimeocdn.com | eager | 0 ms | 15 KiB | already lightbox-deferred |
+| Google Fonts | fonts.gstatic.com | sync CSS | 0 ms | 57 KiB | `display=swap` + preconnect |
 
-**Note on TBT projections:** Deferral shifts script execution out of the FCP→TTI measurement window but does not eliminate it. The scripts still consume main-thread time when they eventually execute. Real-world TBT reduction from deferral is estimated at 3,000-5,000ms — primarily from UserWay, which is the single largest contributor.
+**Total third-party blocking: 3,820 ms.** UserWay is 64% of it, GTM 30%.
+
+**What deferral does and does not do.** Deferring moves execution out of the FCP→TTI window that TBT measures; it does not reduce CPU time. If a deferred script runs before TTI anyway, TBT is unchanged. Expect roughly 2,400-3,000 ms of measured TBT improvement from UserWay, with the rest depending on GTM container reduction, which is a real reduction rather than a shift.
 
 ---
 
 ## 6. Performance Budget
 
-Target byte sizes after remediation:
+| Resource | Current | Budget | Basis |
+|---|---|---|---|
+| Hero video (transferred) | 3,112 KiB | <600 KiB | WebM-first reorder, or static poster |
+| 1st-party total | ~910 KiB | <500 KiB | lazy-load offscreen images |
+| YouTube thumbnails | 459 KiB | 0 KiB | facade |
+| GTM | 275 KiB | <100 KiB | container audit |
+| UserWay | 137 KiB | 137 KiB deferred | keep, defer |
+| Google Fonts | 57 KiB | <25 KiB | 5 families → 2 |
+| **Total payload** | **5,123 KiB** | **<1,500 KiB** | ~3.4× reduction |
+| TBT | 14,710 ms | <5,000 ms | stretch target; see note |
+| LCP | 18.9 s | <4.0 s | first milestone, not the 2.5 s CWV pass |
+| CLS | 0.184 | <0.1 | achievable with C1/C3 alone |
 
-| Resource Type | Current | Budget | Rationale |
-|---------------|---------|--------|-----------|
-| HTML (compressed) | 216 KB (raw) | <30 KB | After Gzip + page cache |
-| CSS (combined) | ~130 KB (13 files) | <50 KB (1-2 files) | After minify + combine + unused CSS removal |
-| JS (deferred) | ~500 KB (19 files) | <200 KB (2-3 bundles) | After minify + defer + code splitting |
-| Fonts | 57 KB (5 families) | <25 KB (2 families) | After reduction + self-hosting |
-| Images (own domain) | ~400 KB | <300 KB | After lazy-loading below-fold + proper sizing |
-| Images (inceptionimages CDN) | 14,964 KB | <200 KB | After video → static poster replacement |
-| Third-party (UserWay + ReviewWave) | 166 KB | <50 KB (deferred) | After deferral |
-| YouTube thumbnails | 455 KB (35 images) | 0 KB (facade) | After facade implementation |
-| **Total** | **~16,558 KB** | **<1,000 KB** | **16x reduction** |
+**On targets.** CLS is the only metric here with a confident target — its cause is a single element with a known fix. LCP and TBT targets are milestones, not predictions: the superseded audit's "<2.5 s LCP" and "TBT <5,000 ms via deferral" were stated as outcomes when its own deferral analysis projected TBT landing at 13,500-15,500 ms. Do not commit to a Core Web Vitals pass on this page without DOM reduction and third-party removal, which are scope beyond configuration.
 
-**Gate:** Any change that adds >50 KB to total page weight requires explicit approval. Lighthouse performance budget configured in CI (when CI is set up).
+**Gate:** any change adding >50 KiB to payload requires explicit approval.
 
 ---
 
 ## 7. Implementation Sequence
 
-| Step | Task | Time | Verification |
-|------|------|------|-------------|
-| 1 | Install LiteSpeed Cache plugin | 15 min | Plugin active in WP Admin |
-| 2 | Add `fl_builder` to LSC URI Excludes | 2 min | BB editor opens without CSS/JS breakage |
-| 3 | Enable page cache (24h TTL, 1h front page) | 5 min | `curl -sI \| grep x-litespeed-cache` shows `hit` on 2nd request |
-| 4 | Enable Gzip compression (level 6) | 5 min | `curl -sI -H 'Accept-Encoding: gzip' \| grep Content-Encoding` shows `gzip` |
-| 5 | Enable browser cache for static assets | 2 min | `Cache-Control: max-age=2592000` present on CSS/JS/images |
-| 6 | Enable CSS minify + combine | 5 min | All CSS in 1-2 files in DevTools Network tab |
-| 7 | Enable JS minify (combine OFF initially) | 2 min | No JS errors in console |
-| 8 | Defer non-critical JS (exclude jquery.js, layout.js, bxslider.js) | 10 min | Lighthouse: render-blocking audit passes |
-| 9 | Defer UserWay via requestIdleCallback | 15 min | Chrome Performance tab: UserWay loads after TTI |
-| 10 | Replace background video with static WebP poster | 2-4 hrs | Lighthouse LCP element is `<img>`, LCP <3s |
-| 11 | Implement YouTube facade (lite-youtube-embed or WP YouTube Lyte) | 2-3 hrs | Network tab: zero i.ytimg.com requests until click |
-| 12 | Reduce Google Fonts to 2 families + add `&display=swap` | 1 hr | Google Fonts URL: 2 families, `display=swap` |
-| 13 | Add CDN (Cloudflare or QUIC.cloud) | 1-2 hrs | CDN headers present; edge TTFB <500ms |
-| 14 | Fix .jpg.webp filename | 5 min | MIME type `image/webp` |
-| 15 | Add `loading="lazy"` to below-fold images missing it | 10 min | All below-fold `<img>` have `loading="lazy"` |
-| 16 | Purge all caches + pre-warm via LSC crawler | 10 min | Crawler processes sitemap; all URLs return HIT |
-| 17 | Run PageSpeed Insights to verify | 5 min | Mobile ≥50, Desktop ≥70 |
+Ordered by value per hour. Times are for the work itself; each step needs re-measurement.
 
-**Total: ~10-14 hours.** Steps 1-9 are config-only (~3 hours). Steps 10-11 are the largest time investments and the largest performance gains. Steps 12-17 are hygiene + verification.
+| # | Task | Time | Verification |
+|---|---|---|---|
+| 1 | Add explicit `width`/`height` to hero video container | 15 min | CLS ≤ 0.1 |
+| 2 | Replace 1×1 GIF `poster` with the existing `Chronic-Pain-Boone-NC-Hiking.webp` | 30 min | LCP element is the poster |
+| 3 | Reorder `<source>`: WebM before MP4 | 15 min | DevTools shows `hiking.webm` requested |
+| 4 | Add `loading="lazy"` to the 5 first-party offscreen images | 10 min | 202 KiB deferred |
+| 5 | Add `&display=swap` to Google Fonts URL; `dns-prefetch` → `preconnect` | 15 min | webfont audit passes |
+| 6 | `defer` ReviewWave scripts (3) | 20 min | render-blocking savings drop ~940 ms |
+| 7 | Defer UserWay via `requestIdleCallback` | 30 min | UserWay blocking <200 ms |
+| 8 | **Re-measure: 3 Lighthouse runs, take the median** | 30 min | establishes a real baseline |
+| 9 | Audit GTM container; remove unused tags | 1-2 hrs | GTM <100 KiB |
+| 10 | Install LSCache plugin; `fl_builder` in URI Excludes; enable crawler on sitemap | 2-3 hrs | sweep shows `hit` on first pass |
+| 11 | Add `Cache-Control` to HTML responses | 15 min | header present on all 44 URLs |
+| 12 | YouTube facade — 35 instances | 2-3 hrs | zero `i.ytimg.com` on load |
+| 13 | Reduce Google Fonts 5 families → 2 | 1 hr | 2 families in URL |
+| 14 | Fix `.jpg.webp` filename; resize `Best-of-W….webp` | 20 min | correct MIME; 20 KiB saved |
+| 15 | Enable ETag on static assets | 10 min | `etag` present |
+| 16 | Add CDN (Cloudflare or QUIC.cloud) | 1-2 hrs | CDN headers present |
+| 17 | **Re-measure: 3 runs, median** | 30 min | compare against step 8 |
 
-### Rollback Plan
+**Steps 1-7 total ~2 hrs 15 min** and require no design approval, no plugin installation, and no page rebuilds. They address all of CLS and the most tractable part of LCP.
 
-If any step breaks the site:
-1. **LiteSpeed Cache:** Disable plugin or toggle "Enable Cache" OFF. BB reverts to serving its own cached CSS/JS. No data loss.
-2. **CSS/JS combine:** Disable combine and minify individually. Most breakage comes from JS combine — disable that first.
-3. **Video replacement:** Revert BB row settings to previous background video. Original MP4 remains on CDN.
-4. **UserWay deferral:** Revert to original inline script. Copy from page revision history.
-5. **YouTube facade:** Delete HTML modules, restore pp-video modules from page revision history.
+**Steps 1-17 total ~12-16 hrs.** Steps 10 and 12 are the largest. There is no configuration path to a green Lighthouse score on this page — steps 9, 12, and DOM reduction are the ceiling-lifting work, and even then 70+ mobile would require removing third parties entirely.
+
+### Rollback
+
+| Change | Rollback |
+|---|---|
+| Video poster / dimensions | Revert BB row settings; no data loss |
+| `<source>` reorder | Swap back; original MP4 untouched on CDN |
+| Script deferral | Remove `defer`; restore inline UserWay snippet from page revision history |
+| LSCache plugin | Toggle "Enable Cache" off, or deactivate — server-level cache continues independently |
+| YouTube facade | Restore `pp-video` modules from page revision history |
+| GTM container | GTM keeps version history; restore any prior container version |
 
 ---
 
-## 8. What's NOT in This Audit
+## 8. Out of Scope
 
-The following were identified during the site crawl but are **outside the scope of page speed performance** and belong in separate audits:
+Identified during the crawl, documented elsewhere, not page-speed issues:
 
-- **On-page SEO** (meta descriptions, title tags, OG tags, schema markup, canonical URLs, heading hierarchy, content depth) — 10 pages have missing or inconsistent metadata
-- **Local SEO** (NAP consistency, Google Business Profile integration, local citation signals)
-- **E-E-A-T** (404 on "Meet the Doctor" page, no practitioner schema)
-- **Security** (missing HTTP security headers, active plugin CVEs including Swiper CVE-2026-27212 CVSS 9.5, xmlrpc.php exposure)
-- **Spelling & grammar** (covered in audit/02-spelling-grammar-audit.md)
-- **Accessibility** (alt text, heading hierarchy gaps — covered in audit/02)
-
-These are documented in separate deliverables. They do not affect page load performance.
+- **On-page SEO and content** — metadata gaps, schema format errors, content depth: `audit/04-seo-content-findings.md`
+- **Spelling and grammar** — `audit/02-spelling-grammar-audit.md`
+- **Accessibility** — alt text and heading hierarchy: `audit/04-seo-content-findings.md` L1-L2. (The superseded audit misrouted these to audit 02, which contains no accessibility findings.)
+- **Security** — missing HTTP security headers, plugin CVEs, `xmlrpc.php` exposure: `audit/04-seo-content-findings.md`. The CVE register there carries unverified severity claims and at least one mismatched citation; treat it as a research starting point, not a finding list.
 
 ---
 
 ## 9. Sources & Methodology
 
-- **Lighthouse 12.6.0** — mobile: emulated Moto G Power, Slow 4G throttling, Chromium 138. Single page session, initial page load. Desktop: no throttling.
-- **Server headers** — verified via `curl -sI` against origin and CDN domains on 2026-07-28.
-- **YouTube CDN cache** — `max-age=7200` verified via `curl -sI` against `i.ytimg.com` thumbnail URL.
-- **Sitemap crawl** — all 44 URLs from `page-sitemap.xml` accessed. 2 URLs blocked by safety classifier (`/good-faith-estimate/`, `/orthotics/`).
-- **Competitive baseline** — based on published Core Web Vitals thresholds and comparable Beaver Builder + LiteSpeed optimization benchmarks. No specific competitor sites measured.
+- **Lighthouse 12.6.0**, Chromium 138.0.0.0, emulated Moto G Power, Slow 4G throttling, single page session, initial page load. Runs captured 2026-07-28 and 2026-07-30 18:13 EDT. Full extract: `audit/data/lighthouse-mobile-2026-07-30.md`.
+- **Header sweep** — all 44 URLs from `page-sitemap.xml`, two passes each plus an uncompressed-size pass, via **GET**. Data: `audit/data/header-sweep-2026-07-30.tsv`. Reproducer: `audit/data/header-sweep.sh`.
+- **Source inspection** — live HTML fetched 2026-07-30; script, stylesheet, thumbnail, and font counts verified with two independent grep patterns each.
+- **Asset sizes** — `content-length` from direct GETs against the CDN.
+
+### Known limitations
+
+1. **Lighthouse figures are single runs.** Two runs of the unmodified site differed by 6 score points, 3.0 s LCP, 3,810 ms TBT, and 3.2× payload. Anything in this document sourced from one run inherits that uncertainty. Re-measure with 3+ runs before judging a fix.
+2. **Desktop was not re-measured.** The superseded audit reported 47/100 desktop from a single run. No desktop figure appears here because none was captured on 2026-07-30.
+3. **Method correction.** The superseded audit verified server headers with `curl -sI` (HEAD). This LiteSpeed server omits `content-encoding` from HEAD responses, which produced a false "HTML is uncompressed" finding that became a CRITICAL item. All header claims here use GET. See `audit/data/README.md`.
+4. **No competitor measurements.** Thresholds cited are Google's published Core Web Vitals values. No competitor sites were tested, and no ranking or conversion outcomes are projected — page speed is a documented but minor ranking signal, and the case for this work is user experience.
