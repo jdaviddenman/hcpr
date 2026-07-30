@@ -1,7 +1,6 @@
 # On-Page SEO & Content Audit: highcountrypainrelief.com
 
 **Date:** 2026-07-28
-**POCs:** James David Enman | Amy Denman
 
 **Note:** This document contains findings that were identified during the site crawl but are **outside the scope of page speed performance.** Page speed findings are in `audit/01-page-speed-performance-audit.md`.
 

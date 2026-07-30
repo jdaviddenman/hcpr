@@ -2,11 +2,6 @@
 
 Page speed performance audit, caching analysis, and remediation roadmap for [highcountrypainrelief.com](https://www.highcountrypainrelief.com).
 
-## POCs
-
-- **James David Enman**
-- **Amy Denman**
-
 ## Documents
 
 | # | Document | Scope |
