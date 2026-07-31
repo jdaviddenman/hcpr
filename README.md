@@ -34,15 +34,15 @@ Measured 2026-07-30. **[LH]** = from the Lighthouse run of 18:13 EDT, carried fo
 
 ## The Short Version
 
-**One Beaver Builder dropdown removes 62% of mobile payload, the LCP element, and the entire CLS contributor.** The hero row carries `data-video-mobile="yes"`, and BB's own JavaScript appends the `<video>` only when `!_isMobile() || videoMobile == "yes"`. Setting **Show Video On Mobile = No** skips it on mobile user agents — the profile Lighthouse emulates and the profile that scores 21. Desktop keeps the video. About five minutes, no design approval. That is step 1.
+**One Beaver Builder dropdown stops 60.7% of mobile payload being fetched.** The hero row carries `data-video-mobile="yes"`. On a mobile user agent BB's else-branch sets `src=""` on the `<video>` instead of leaving its two `<source>` children active, so neither video file is downloaded — and the fallback WebP that BB has already attached as a background paints instead, becoming the new LCP element at 77 KB, first-party. Setting **Show Video On Mobile = No** takes about five minutes and needs no design approval. It does **not** remove the `<video>` element; check for the absent video *request*, not the absent element. That is step 1.
 
-**The CLS does not come from a missing row height.** The row already has explicit padding at all three breakpoints. The served markup carries no `data-width`/`data-height`, so BB inserts the video at one size and re-sizes it on `loadedmetadata` — a shift gated on the video download. The desktop fix is a CSS rule on `.fl-bg-video video`, not a row setting.
+**The CLS does not come from a missing row height.** The row already has explicit padding at all three breakpoints. The served markup carries no `data-width`/`data-height`, so BB inserts the video at one size and re-sizes it on `loadedmetadata` — a shift gated on the video download. The desktop fix is a CSS rule on `.fl-bg-video video`, **with every declaration `!important`**: BB writes both sizes through jQuery `.css()`, i.e. inline styles, and re-applies them on a debounced `resize`.
 
 **Nothing about the hero is in the HTML.** Zero `<video>`, zero `<source>`, zero `poster` attributes. Beaver Builder builds all of it in JavaScript from `data-` attributes, hardcodes a 1×1 GIF poster, and applies the real fallback image as a CSS background on the element it just created. That is why discovery takes 15.8 seconds and why nothing paints early.
 
 **A page-speed plugin is loaded and the frontend shows no sign of it.** 10Web Booster's REST routes are registered — `set_critical`, `page_cache`, `regenerate_webp` — on a page with zero `defer`, zero `async`, no critical CSS, and no CDN. There are three plausible explanations, one of which would reorder the whole sequence, and the audit cannot distinguish them from outside. Check it before hand-writing work it may already do.
 
-**About 2 hours 45 minutes needs no design approval and no plugin installs** — steps 1-8 of audit 1 §8. The first two steps are 20 minutes of that and carry most of the value.
+**Between 3 h 25 min and 4 h 25 min needs no design approval and no plugin installs** — steps 1-8 of audit 1 §8. The first two steps are 20 minutes of that and carry most of the value.
 
 **Software is current; its dependencies are not.** WordPress 7.0.2 is the version `api.wordpress.org` reports as current, and Yoast 28.1 is the latest release. What is stale is vendored inside those current plugins — Bootstrap 3.4.1 (EOL 2019), Swiper 8.4.7, fancyBox 3.5.7, Font Awesome 5.15.4, Animate.css 3.5.1 — and no plugin update reaches any of it.
 
@@ -58,7 +58,23 @@ Take the median of 3+ Lighthouse runs and re-run the header sweep before declari
 
 ## Revision History
 
-Documents 1, 3, and 5 are at revision 3 (2026-07-30). Every revision has been a correction pass, and the corrections have gone in both directions — some findings were understated, several were simply wrong.
+Documents 1, 3, and 5 are at revision 4 (2026-07-31). Every revision has been a correction pass, and the corrections have gone in both directions — some findings were understated, several were simply wrong, and rev. 4 had to undo one thing rev. 3 had "corrected" while it was already right.
+
+**The pattern across four adversarial reviews is worth stating plainly: the measurements have survived every attack; the reasoning has needed correcting every time.** Byte accounting, sweep statistics, the markup census, and the Lighthouse transcription have been independently reproduced at each pass. Recommendations derived from reading Beaver Builder and WordPress source have not.
+
+### rev. 4 — corrections to rev. 3, after a fourth adversarial review
+
+Rev. 3 was reviewed by a critic chartered against **rev. 3's own new reasoning**, not the material three earlier critics had already checked. All four defects it found were in code-derived claims rev. 3 had added.
+
+| Claim | Correction |
+|---|---|
+| "Show Video On Mobile = No **skips the append entirely**" — verified by "no `<video>` in `.fl-bg-video`" | `wrap.append(videoTag)` appears in **both** branches. The else-branch sets `src=""`, which stops both video files being fetched, and appends the element anyway. The verification would have reported failure on a correct fix. |
+| The CSS rule makes BB's two sizing passes "**no-ops**" | Both are jQuery `.css()` inline writes, re-applied on a debounced `resize`. Every declaration now carries `!important`. |
+| Adding `width`/`height` "**may make core add `loading="lazy"` by itself**" | Refuted by six counterexamples on the same page. Effort re-scoped 20 min → 1-2 hrs; the targets span three plugin templates. |
+| "`remove_action('wp_print_styles','print_emoji_styles')` is a **silent no-op**" | Backwards. WP 7.0.2 still registers that hook and treats unhooking it as the supported disable path. Rev. 3's replacement left the deprecated function running. **Rev. 2 was right; reverted to it.** |
+| "62% of mobile payload" | 60.7%. 62.4% is the whole image host, including a footer image the setting does not touch. |
+| "16-20 hours" for the full sequence | Its own per-step figures summed to 14.1-18.3. Now 14.8-20.0. |
+| `audit/03` labelled rev. 3 | It still prescribed both remedies rev. 3 withdrew, and three of its four step cross-references were wrong. |
 
 ### rev. 3 — corrections to rev. 2, after adversarial review
 

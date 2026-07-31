@@ -40,15 +40,15 @@ cache state       pass 2: 44/44 HIT
 
 ### Not stable — the cold-cache path
 
-The two sweeps ran at 21:46 UTC and 23:04 UTC — **78 minutes apart**, derived from the LiteSpeed ETag mtimes recorded in the `etag` column of both files (`<size>-<mtime>;br`).
+The two sweeps ran at 21:46 UTC and 23:04 UTC — **78 minutes apart**, derived from the LiteSpeed ETag mtimes in the `etag` column of both files. The format is `<counter>-<mtime>;br`: the first field is a monotonic counter, not a byte size (the homepage has `size_raw=218440` and an ETag of `424-1785448018;br`), and it increases across rows within a sweep — 424→467 in sweep 1, 496→540 in sweep 2. Only the second field is used for the timing derivation.
 
 | | Run 1 | Run 2 | Ratio |
 |---|---|---|---|
 | Cache state, pass 1 | 44/44 MISS | 42/44 MISS, 2 HIT | — |
 | TTFB MISS — min | 0.406 s | 0.475 s | 1.2× |  ← **combined minimum is 0.406 s**
-| TTFB MISS — median | 0.845 s | **1.788 s** | **2.1×** |
+| TTFB MISS — median | 0.845 s | **1.788 s** | **2.1×** |  ← lower-middle value; `statistics.median` gives 0.8577 / 1.7882
 | TTFB MISS — mean | 1.204 s | **2.231 s** | **1.9×** |
-| TTFB MISS — p90 | 2.277 s | **4.293 s** | **1.9×** |
+| TTFB MISS — p90 | 2.277 s | **4.293 s** | **1.9×** |  ← `sorted[int(0.9*(n-1))]`
 | TTFB MISS — max | 2.654 s | **4.946 s** | **1.9×** |
 | TTFB HIT — range | 0.052-0.073 s | 0.053-0.113 s | stable — **combined 0.052-0.113 s across 90 observations** |
 

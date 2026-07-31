@@ -1,6 +1,6 @@
 # Page Load, Caching & Third-Party Deep-Dive: highcountrypainrelief.com
 
-**Date:** 2026-07-30 (rev. 3 — supersedes rev. 2 and rev. 1 of the same date, and the 2026-07-28 original)
+**Date:** 2026-07-31 (rev. 4 — supersedes rev. 3, rev. 2, and rev. 1 of 2026-07-30, and the 2026-07-28 original)
 **Scope:** caching layers, third-party behaviour, and the YouTube facade. Metric findings and the remediation sequence live in `audit/01-page-speed-performance-audit.md`; this document does not restate them.
 **Evidence:** `audit/data/header-sweep-2026-07-30.tsv` (run 1), `audit/data/header-sweep-2026-07-30-run2.tsv` (run 2), `audit/data/lighthouse-mobile-2026-07-30.md`
 
@@ -24,7 +24,7 @@
 | `fonts.googleapis.com` | Font CSS | `private, max-age=86400` | direct GET | Minor. `private` is correct — the CSS varies by user agent. The issue is 5 families and no `display=swap`, not the TTL. |
 | `i.vimeocdn.com` | Vimeo thumbnail | `max-age=2592000` | direct GET | No. 30 days, 15 KiB, one embed. |
 
-> **Provenance — the ReviewWave S3 endpoint.** The 2026-07-28 audit recorded this endpoint as returning **403 to direct requests** and marked its cache policy unverifiable. That could not be reproduced on 2026-07-30: **both GET and HEAD return 200.** The original 403 is unexplained — plausibly transient, or IP- or region-based on AWS's side — and O is not claiming it was a HEAD-request artifact, because HEAD works. The figures in the row above are measured, not inferred. If a future check hits a 403 again, that is the endpoint being inconsistent rather than the earlier audit being wrong.
+> **Provenance — the ReviewWave S3 endpoint.** The 2026-07-28 audit recorded this endpoint as returning **403 to direct requests** and marked its cache policy unverifiable. That could not be reproduced on 2026-07-30: **both GET and HEAD return 200.** The original 403 is unexplained — plausibly transient, or IP- or region-based on AWS's side. It is **not** being attributed to the HEAD-request artifact described above, because HEAD works against this endpoint. The figures in the row above are measured, not inferred. If a future check hits a 403 again, that is the endpoint being inconsistent rather than the earlier audit being wrong.
 
 ### The actual cache gaps
 
@@ -79,11 +79,12 @@ Which page is slowest on a cache miss is not a property of the page. An earlier 
 
 | Action | Why |
 |---|---|
-| Install LiteSpeed Cache plugin | Not for its cache — server-level caching already works. For its **crawler**, which walks the sitemap and warms every entry. |
+| **First: a cron'd `curl`/`wget --spider` loop over the 44 sitemap URLs** on the same EC2 box | Warms the identical server-level cache. No plugin, no `.htaccess` rewrite, no exposure to the BB-editor breakage in §4. ~15 min. |
+| Only if that is insufficient: LiteSpeed Cache plugin | **Not an inert addition.** The plugin is the control plane for the server module — installing it rewrites `.htaccess` and takes over cache rules, TTLs, purge behaviour, and vary logic. Its crawler warms only what its own rules deem cacheable, needs the plugin's cache enabled, needs the crawler switched on at the **LiteSpeed server admin** level (routinely off), and needs a working cron. Rev. 3 of this document described it as installable "just for the crawler"; that was wrong and `audit/01` M1 corrected it. |
 | Point the crawler at `page-sitemap.xml` | 44 URLs, all currently cold |
 | Raise Default Public TTL to 604800 s (7 days) | Content changes rarely; long TTL plus purge-on-change beats short TTL |
 | Front Page TTL 86400 s (24 h) | Homepage carries promos |
-| Add `Cache-Control: public, max-age=3600` to HTML | Currently absent on 44/44 |
+| Add `Cache-Control: no-cache` to HTML | Currently absent on 44/44. **`no-cache`, not `max-age=3600`** — HTML already carries an ETag on 44/44, so `no-cache` gives near-free 304 revalidation with no staleness window. `max-age=3600` caches a document that cannot be purged, including for logged-in editors and on booking and form pages. |
 | **Add `fl_builder` to Page Optimization → Tuning → URI Excludes first** | Without this the Beaver Builder editor breaks |
 
 **Note on UA-keyed caching.** Responses carry `vary: Accept-Encoding, User-Agent`. A per-User-Agent cache-fragmentation hypothesis was tested — 8 distinct UA strings, first request each — and **refuted**: 7 returned HIT. LiteSpeed buckets user agents into groups rather than keying on the full string. `Vary: User-Agent` is not fragmenting this cache and needs no action.
@@ -190,9 +191,9 @@ If WP YouTube Lyte is preferred, enable "Cache thumbnails locally" so the poster
 | UserWay `widget_base.css` | cdn.userway.org | injected | 87 ms | 71 KiB | — |
 | **GTM `gtm.js`** | googletagmanager.com | async | **831 ms** | 115 KiB | — |
 | **GTM `gtag/js`** | googletagmanager.com | async | **334 ms** | 159 KiB | — |
-| ReviewWave `reviews_embed.js` | cdn.reviewwave.com | sync `<head>` | 117 ms | 4 KiB | **790 ms** |
-| ReviewWave `chat_embed.js` | cdn.reviewwave.com | sync `<head>` | 11 ms | 7 KiB | **150 ms** |
-| ReviewWave config | rw-embed-data.s3… | sync `<head>` | 14 ms | 56 KiB | **1,570 ms** |
+| ReviewWave `reviews_embed.js` | cdn.reviewwave.com | sync `<head>` | — | 4 KiB | **790 ms** |
+| ReviewWave `chat_embed.js` | cdn.reviewwave.com | sync `<head>` | — | 7 KiB | **150 ms** |
+| ReviewWave config | rw-embed-data.s3… | sync `<head>` | — | 56 KiB | **1,570 ms** |
 | YouTube thumbnails ×35 | i.ytimg.com | eager CSS bg | 0 ms | 459 KiB | — |
 | Google Maps embed | google.com/maps | `<iframe loading="lazy">` | 0 ms | 0 on load | **no action** |
 | Google Fonts CSS | fonts.googleapis.com | sync | 0 ms | 1 KiB | **790 ms** |
@@ -226,7 +227,7 @@ The iframe census itself stands: 39 iframes, **35 carry `data-src`** (deferred),
 |---|---|---|
 | **CDN** | none — both hosts on AWS EC2, no CDN headers | Cloudflare free or QUIC.cloud. Low priority: warm TTFB is already 52-113 ms |
 | **Page cache** | active at server level, **cold on 42-44 of 44 pages across two sweeps** | Same cache, pre-warmed by the LSCache crawler. 7-day public TTL, 24 h front page |
-| **HTML `Cache-Control`** | **absent on 44/44** | `public, max-age=3600` |
+| **HTML `Cache-Control`** | **absent on 44/44** | `no-cache` — see §2 |
 | **HTML compression** | **Brotli, working** — 81% saved | no change |
 | **Static compression** | **Brotli, working** | no change |
 | **Static browser cache** | `max-age=2592000` (30 days), working | Keep 30 days. Extend to 1 year **only if** `?ver=` hash-busting is verified end-to-end — some CDNs strip query strings, and BB relies on them |
@@ -244,4 +245,4 @@ The consolidated, ordered implementation sequence is **§8 of `audit/01-page-spe
 
 The superseded documents each carried their own sequence, and they disagreed — 17 steps totalling "~10-14 hours" in one, 15 steps totalling "~6-8 hours" in the other, for substantially the same work, with per-step times that summed to neither figure. One sequence, in one place, is the fix.
 
-Caching-specific items in that sequence: **step 13** (LSCache plugin, `fl_builder` exclude, crawler), **step 14** (`Cache-Control` on HTML), **step 18** (static ETag), **step 20** (CDN).
+Caching-specific items in that sequence: **step 13** (pre-warm via a cron'd `curl` loop), **step 14** (`Cache-Control: no-cache` on HTML), **step 20** (static ETag), **step 23** (CDN, after the `.jpg.webp` rename in step 22).

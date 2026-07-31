@@ -1,6 +1,6 @@
 # Architecture, Version Currency & Code Quality: highcountrypainrelief.com
 
-**Date:** 2026-07-30 (rev. 3)
+**Date:** 2026-07-31 (rev. 4)
 **Scope:** platform architecture, plugin inventory, version currency, per-asset byte accounting, and code-quality indicators. Metric findings and the remediation sequence live in `audit/01-page-speed-performance-audit.md`; caching and third-party behaviour live in `audit/03-page-load-caching-deep-dive.md`. **This document does not restate their findings** — where a measurement here became a finding there, the finding ID is cited.
 
 **Evidence:** live GET of `/` and `/knee-pain-lp/`, `GET /wp-json/`, per-asset `content-length` under two encodings, `api.wordpress.org` version APIs. All 2026-07-30.
@@ -254,7 +254,7 @@ Likewise, the sequence additions this document proposed in revision 1 are integr
 
 1. **No Lighthouse run accompanies this document.** Chrome cannot start in the audit environment. Figures marked **[LH]** are carried forward from 2026-07-30 18:13 EDT and inherit the run-to-run variance documented in `audit/01` §9.
 2. **PowerPack and Ultimate Addons currency is unverified.** Both are premium with no public version API. PowerPack 2.40.1.6 is what the site reports; whether it is current was not established. UABB's installed version could not be determined at all — see B3.
-3. **10Web's configuration state is inferred, not observed.** The evidence establishes that the plugin is active and that the frontend shows no optimisation. It does not establish which explanation applies; that requires wp-admin access. See `audit/01` C0.
+3. **10Web's configuration state is inferred, not observed.** The evidence establishes that the plugin's code is **loaded** — not that it is active in the wp-admin sense; see §3 — and that the frontend shows no optimisation. It does not establish which explanation applies; that requires wp-admin access. See `audit/01` C0.
 4. **Retracted in rev. 3.** Rev. 2 listed the Google Maps embed as an unmeasured eager load. It carries `loading="lazy"` and does not load on view. See `audit/01` H5.
 5. **Two pages sampled, not 44.** Findings marked site-wide (B1, B3, B4, B9, B10) were confirmed on both `/` and `/knee-pain-lp/`. The rest are homepage measurements. Header facts come from all 44 URLs across two sweeps — `audit/data/README.md`.
 6. **`readme.txt` probing infers presence from a 403.** The control test validates the discriminator, but a plugin shipping no `readme.txt` returns 404 while being present. Absence claims from this method are weaker than presence claims.

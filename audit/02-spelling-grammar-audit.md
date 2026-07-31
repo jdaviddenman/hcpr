@@ -142,13 +142,13 @@ Items 1-6 are in shared header, nav, and footer, so each is a single edit that c
 
 ## Coverage
 
-**What was reviewed at content level: 5 pages.** `/`, `/back-on-trac/`, `/back-pain-facts/`, `/special-chronic-pain/`, and site-wide chrome.
+**What was reviewed at content level: 4 pages plus site-wide chrome.** `/`, `/back-on-trac/`, `/back-pain-facts/`, `/special-chronic-pain/`.
 
-**What was not:** the remaining 39 pages were crawled and checked for shared chrome errors (#1-13) but were **not** proofread line by line for page-specific errors. The "35 confirmed errors" figure covers site-wide chrome plus four content pages. It is not a whole-site error count, and page-specific errors on the other 39 pages are likely to exist.
+**What was not:** the remaining 40 pages were crawled and checked for shared chrome errors (#1-13) but were **not** proofread line by line for page-specific errors. The "35 confirmed errors" figure covers site-wide chrome plus four content pages. It is not a whole-site error count, and page-specific errors on the other 39 pages are likely to exist.
 
 - **Sitemap:** `page-sitemap.xml` contains **44 URLs**, verified 2026-07-30. *(The original audit stated 42 URLs plus nav-discovered pages; that was wrong.)*
-- **2 pages blocked** by safety classifier and not reviewed: `/good-faith-estimate/`, `/orthotics/`.
+- **2 pages were not reviewed at all:** `/good-faith-estimate/` and `/orthotics/`. They are included in the 40 above.
 - **`/us/`** returned minimal text at crawl time. It now returns HTTP 200 and is present in the sitemap — proofread it before publication.
 - Pages consisting mainly of forms, embeds, or navigation (`/contact-us/`, `/review-us/`, `/new-patient-*`) carry little body text; their only likely errors are in shared chrome, already captured above.
 
-**To reach whole-site coverage** the remaining 39 pages need a content-level pass. Budget roughly 3-4 hours.
+**To reach whole-site coverage** the remaining 40 pages need a content-level pass. Budget roughly 3-4 hours.

@@ -1,6 +1,6 @@
 # Page Speed Performance Audit: highcountrypainrelief.com
 
-**Date:** 2026-07-30 (rev. 3 — supersedes rev. 2 and rev. 1 of the same date, and the 2026-07-28 original)
+**Date:** 2026-07-31 (rev. 4 — supersedes rev. 3, rev. 2, and rev. 1 of 2026-07-30, and the 2026-07-28 original)
 **Platform:** WordPress 7.0.2 + Beaver Builder 2.10.3 + Beaver Themer 1.5.3.2 + BB Theme 1.7.19.2 + PowerPack for BB 2.40.1.6 + Ultimate Addons for BB
 **Server:** LiteSpeed on AWS EC2 (`44.223.213.21`), HTTP/2, HTTP/3 advertised. No CDN. Server-level page cache active but cold on nearly every page. Static assets: Brotli + 30-day `max-age`, no ETag. HTML: Brotli, no `Cache-Control`.
 
@@ -17,7 +17,7 @@
 
 > **What is fresh and what is not.** Every markup fact, header, byte count, and plugin fact was measured directly. **Every Lighthouse number is carried forward from the 2026-07-30 18:13 EDT run and was not re-measured** — no Chrome binary can start in this environment. Lighthouse-sourced rows are marked **[LH]**; treat each as a single sample, and see §9 for how much that costs.
 
-> **Why there is a rev. 3.** Rev. 2 was reviewed by three independent adversarial critics. Its *measurements* survived — versions, plugin inventory, headers, per-asset bytes, and the Lighthouse transcription were all reproduced independently. Its *recommendations* did not: one HIGH finding was factually false, four fixes were inert or aimed at the wrong mechanism, three verification criteria could not distinguish success from no-op, and the single most effective change available on this page was quoted in rev. 2's own evidence block and never proposed. Full list in the Revision History.
+> **Why there is a rev. 4.** Rev. 2 was reviewed by three adversarial critics and rewritten as rev. 3. Rev. 3 was then reviewed by a fourth, which found that **rev. 3's own new Beaver Builder and WordPress reasoning was the least-verified material in it** — four defects, one of which had "corrected" a rev. 2 recommendation that was already right. The evidence layer has now survived four independent attacks: byte accounting, sweep statistics, markup census, and the Lighthouse transcription were reproduced every time. The reasoning layer has needed correcting every time. Read §4 with that asymmetry in mind, and treat anything here marked *inferred from code* as exactly that. Full list in the Revision History.
 
 ---
 
@@ -27,12 +27,12 @@ The site scored **21/100 on mobile Lighthouse** on 2026-07-30; a run two days ea
 
 **The four things that matter, in order:**
 
-1. **One Beaver Builder row setting removes 62% of mobile payload, the LCP element, and the entire CLS contributor.** The hero row carries `data-video-mobile="yes"`. BB's own JavaScript appends the `<video>` only when `!_isMobile() || videoMobile == "yes"`. Setting **Show Video On Mobile = No** skips it entirely on mobile user agents — the profile Lighthouse emulates and the profile that scores 21. Desktop is untouched. About five minutes, no design approval. See **C1-A**.
+1. **One Beaver Builder row setting removes 60.7% of mobile payload and swaps the LCP element for a 77 KB first-party image.** The hero row carries `data-video-mobile="yes"`. On a mobile user agent BB's else-branch sets `src=""` on the `<video>` instead of leaving the two `<source>` children active, so neither video file is fetched — and the fallback WebP that BB has already attached as a background paints instead. Setting **Show Video On Mobile = No** costs about five minutes and needs no design approval. It does **not** remove the `<video>` element, which is why rev. 3's verification for this step was wrong. See **C1-A**.
 2. **CLS does not come from a missing row height. It comes from Beaver Builder sizing the video twice.** The row already has explicit padding at all three breakpoints. The served markup carries no `data-width`/`data-height`, so BB inserts the video at one size and re-sizes it on `loadedmetadata` — a shift gated on the video download. See **C1-B**.
 3. **A page-speed plugin is loaded and the frontend shows no sign of it.** 10Web Booster's REST routes are registered — `set_critical`, `page_cache`, `regenerate_webp` among them — on a page with zero `defer`, zero `async`, no critical CSS, and no CDN. There are at least three explanations and this audit cannot distinguish them from outside. Check it before hand-writing work it may already do. See **C0**.
 4. **Main-thread work totals 36.9 s [LH]**, of which 16.3 s is script evaluation. TBT is 14,710 ms against a 200 ms threshold. See **C2**.
 
-**About 2 hours 45 minutes needs no design approval, no plugin installs, and no page rebuilds** — steps 1-8 of §8. The first two steps are 20 minutes of that and carry most of the value on the measured profile.
+**Between 3 h 25 min and 4 h 25 min needs no design approval, no plugin installs, and no page rebuilds** — steps 1-8 of §8. The first two steps are 20 minutes of that and carry most of the value.
 
 **There is no configuration path to a green score.** The ceiling is 3,197 rendered DOM elements [LH], a 10,883 ms Beaver Builder layout bundle, four libraries doing two jobs, and 3,820 ms of third-party main-thread blocking.
 
@@ -103,6 +103,8 @@ Load Delay is the gap between navigation start and the browser beginning to fetc
 
 The Google Maps embed carries `loading="lazy"` and does not load on view. It is correctly absent from this table.
 
+**On the ReviewWave S3 object.** It appears at 58 KiB here, 55.7 KiB in H2, and 56 KiB in §6. All three are faithful transcriptions of *different Lighthouse rows* describing the same object, whose actual `Content-Length` is **56,589 B** (55.3 KiB). The spread is Lighthouse's, not this document's; no row has been altered to hide it.
+
 ### Through the parser — 1,514 KiB
 
 Every first-party asset fetched twice, `Accept-Encoding: br,gzip` and `identity`. Per-file tables: `audit/05-architecture-and-code-quality.md` §4.
@@ -164,20 +166,34 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
 - **Evidence — Beaver Builder's own code**, read from `2-layout.js` on the origin:
 
   ```js
-  // 1. the mobile gate
-  if(!FLBuilderLayout._isMobile()||(FLBuilderLayout._isMobile()&&"yes"==videoMobile)){ …append the video… }
-  _isMobile:function(){return/Mobile|Android|Silk\/|Kindle|BlackBerry|Opera Mini|Opera Mobi|webOS/i.test(navigator.userAgent);}
+  videoTag=$('<video autoplay loop muted playsinline></video>');
 
-  // 2. the poster is hardcoded; the real fallback is a CSS background on the JS-created element
+  // the poster is hardcoded 1x1; the real fallback is a CSS background on the element BB creates
   if('undefined'!=typeof fallback&&''!=fallback){
     videoTag.attr('poster','data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7')
     videoTag.css({backgroundImage:'url("'+fallback+'")',backgroundSize:'cover',backgroundPosition:'center center'})}
 
-  // 3. with no data-width/height, the video is sized once, then again on metadata
+  // both <source> children are attached BEFORE the mobile gate
+  if('undefined'!=typeof mp4 &&''!=mp4 ){mp4Tag =$('<source />');mp4Tag.attr('src',mp4);  videoTag.append(mp4Tag);}
+  if('undefined'!=typeof webm&&''!=webm){webmTag=$('<source />');webmTag.attr('src',webm);videoTag.append(webmTag);}
+
+  // the mobile gate — note BOTH branches append
+  if(!FLBuilderLayout._isMobile()||(FLBuilderLayout._isMobile()&&"yes"==videoMobile)){
+    … wrap.append(videoTag); …        // sources live: the browser picks one and downloads it
+  } else {
+    videoTag.attr('src','')           // src beats <source>: neither file is fetched
+    wrap.append(videoTag);            // the element is STILL appended
+  }
+  _isMobile:function(){return/Mobile|Android|Silk\/|Kindle|BlackBerry|Opera Mini|Opera Mobi|webOS/i.test(navigator.userAgent);}
+
+  // sizing: with no data-width/height, the video is sized once, then again on metadata
   if(vidHeight===''||typeof vidHeight==='undefined'||vidWidth===''||typeof vidWidth==='undefined'){
     vid.css({'left':'0px','top':'0px','width':newWidth+'px'});
     vid.on('loadedmetadata',FLBuilderLayout._resizeOnLoadedMeta);
     return;}
+  // …and again on every resize
+  win.on('resize.fl-bg-video',function(e){clearTimeout(resizeBGTimer);
+    resizeBGTimer=setTimeout(function(){FLBuilderLayout._resizeBgVideos(e);},100);});
   ```
 
   And from `2-layout.css` — the hero row already has a deterministic height at every breakpoint:
@@ -193,16 +209,38 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
 
 - **Fixes, in value order:**
 
-  - **A. Set Show Video On Mobile = No** (~5 min). BB row → Style → Background → Video → "Show Video On Mobile". On a mobile UA this skips the append entirely: no 3,112 KiB transfer, no LCP video element, no `loadedmetadata` shift. Desktop keeps the video. **This is the single largest change available on this page and it is one dropdown.**
-    *Verify while doing it:* in the else-branch BB sets `videoTag.attr('src','')`, and an empty `src` resolves to the document URL in some browsers. Confirm in DevTools that no media request is issued for the page itself.
+  - **A. Set Show Video On Mobile = No** (~5 min). BB row → Style → Background → Video → "Show Video On Mobile". Largest change available on this page, and it is one dropdown. **What it actually does, from the code above:**
 
-  - **B. Neutralise both BB sizing passes** (~15 min). In the child theme:
+    | | Mobile, before | Mobile, after |
+    |---|---|---|
+    | `hiking.mp4` / `hiking.webm` fetched | yes, 3,112 KiB | **no** — `src=""` on the `<video>` makes the browser ignore both `<source>` children |
+    | `<video>` in `.fl-bg-video` | present | **still present**, with `src=""` |
+    | What paints | 1×1 GIF, then video frames | the fallback WebP, already set as `background-image` on the same element — **76,870 B, first-party** |
+    | LCP element | the video | the fallback WebP |
+    | `loadedmetadata` → second sizing pass | fires | no media loads, so it should not fire — *inferred from the code, not measured* |
+
+    **Correction to rev. 3.** It claimed this "skips the append entirely" and set the step's verification to "no `<video>` inside `.fl-bg-video`". `wrap.append(videoTag)` appears in **both** branches — `grep -c 'wrap.append(videoTag)' 2-layout.js` returns 2. An implementer applying this fix correctly and then checking for the absence of a `<video>` would find one and conclude the fix had failed.
+
+    *Verify while doing it:* an empty `src` resolves against the document URL, and some browsers issue a request for the page itself as media. Confirm in DevTools. This is small but real, and it is the one part of C1-A that could go wrong.
+
+  - **B. Override both BB sizing passes** (~15 min). In the child theme — **`!important` is load-bearing**:
     ```css
-    .fl-bg-video video{width:100%;height:100%;left:0;top:0;min-width:0;min-height:0;
-                       max-width:none;object-fit:cover;transform:none;}
+    .fl-bg-video video{
+      width:100% !important; height:100% !important;
+      left:0 !important; top:0 !important;
+      min-width:0 !important; min-height:0 !important;
+      max-width:none; object-fit:cover; transform:none !important;}
     ```
-    With definite dimensions from CSS, BB's initial `width` write and its `loadedmetadata` re-size both become no-ops. This is the CLS fix on **desktop**, where A does not apply.
-    *Not the fix:* setting a row height (the row is already sized by padding), or `aspect-ratio` on `.fl-bg-video` (it is `position:absolute` with all four insets `0`, so both axes are already definite and `aspect-ratio` is ignored). Rev. 2 recommended both.
+    **Correction to rev. 3.** It gave this rule without `!important` and said BB's two passes "become no-ops." They do not. Both are jQuery `.css()` calls, which write the inline `style` attribute:
+    ```js
+    vid.css({'left':'0px','top':'0px','width':newWidth+'px'});                    // pass 1
+    video.css({'left':…,'top':…,'width':…,'height':…});                           // pass 2, on loadedmetadata
+    ```
+    An inline declaration beats any author stylesheet rule that is not `!important`, and BB re-applies both on a 100 ms-debounced `resize` handler, so the rule must win on every re-application. `object-fit:cover` would have applied regardless — BB never sets it — but it governs painting inside the box, not the box geometry, and the geometry is the shift.
+
+    This is the CLS fix on **desktop**, where A does not apply. If `!important` is unacceptable, the alternative is to unbind `loadedmetadata` on `.fl-bg-video video` after BB initialises; that is more fragile and needs a load-order guarantee.
+
+    *Not the fix:* setting a row height (the row is already sized by padding at all three breakpoints), or `aspect-ratio` on `.fl-bg-video` (`position:absolute` with all four insets `0`, so both axes are already definite and `aspect-ratio` is ignored). Rev. 2 recommended both.
 
   - **C. Make something paint early** (~20 min). Move the fallback onto an element that exists in the served HTML, and warm its connection:
     ```html
@@ -215,6 +253,8 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
     ```
     **The preload alone paints nothing** — rev. 2 claimed it did. It warms the HTTP cache for an image that only ever gets applied to an element BB creates later. The CSS rule is the half that makes it visible. The poster file is 76,870 B, confirmed live.
 
+    **Scope note.** The poster is on `www.highcountrypainrelief.com` — **first-party, already connected**. The `preconnect` above is for the *video* host and is justified by H5, not by this poster. Once C1-A ships, that preconnect is **inert on mobile**, because nothing on `chiro.inceptionimages.com` is fetched there. It still earns its place on desktop. Rev. 3 bundled the two without saying so.
+
   - **D. Serve WebM only** (~15 min, **with a caveat**). Clearing the MP4 field in the BB row leaves a 5.8 MB source instead of 15.3 MB, and BB accepts it (`if('undefined'!=typeof mp4&&''!=mp4)`). **But iOS Safari only gained full WebM support in 17.4**, and macOS Safari in 16.0 — below those, visitors get the fallback image instead of the video. That is a design change on a real slice of a local practice's traffic, and it is the reverse of what rev. 2 asserted. If A ships, D matters only on desktop.
 
   - **E. Replace the video with a static image** (1-2 hrs + design approval). Removes the problem outright on all profiles.
@@ -222,7 +262,7 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
   - **Recommended:** **A + B + C.** About 40 minutes, no design approval, and between them they cover mobile and desktop.
 
 - **Projected outcome:** on the emulated-mobile profile Lighthouse measures, A removes the LCP element and the CLS contributor outright. Do not project a score — see §9.
-- **Verification:** with a mobile UA, DevTools Network shows **no request to `hiking.mp4` or `hiking.webm`** and no `<video>` inside `.fl-bg-video`. With a desktop UA, CLS ≤ 0.1 and `Avoid large layout shifts` lists no non-zero shift.
+- **Verification:** with a mobile UA, DevTools Network shows **no request to `hiking.mp4` or `hiking.webm`**, and the LCP element is `Chronic-Pain-Boone-NC-Hiking.webp`. Do **not** check for the absence of a `<video>` element — one remains, with `src=""`. With a desktop UA, CLS ≤ 0.1 and `Avoid large layout shifts` lists no non-zero shift.
 - **Rollback:** all of these are a BB row setting or child-theme lines. Revert the file, or the page revision.
 
 ---
@@ -432,10 +472,30 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
       wp_dequeue_style('wp-block-library');
       wp_dequeue_style('classic-theme-styles');
   }, 100);
-  remove_action('wp_enqueue_scripts', 'wp_enqueue_emoji_styles');   // WP >= 6.4
+  remove_action('wp_print_styles', 'print_emoji_styles');
   remove_action('wp_head', 'print_emoji_detection_script', 7);
   ```
-  **Note:** `print_emoji_styles()` has been deprecated since **WordPress 6.4** in favour of `wp_enqueue_emoji_styles()`. Rev. 2 recommended `remove_action('wp_print_styles','print_emoji_styles')`, a silent no-op on 7.0.2 — the live page proves the new path is in use (`<style id="wp-emoji-styles-inline-css">`; the deprecated function printed an unlabelled `<style>`). `wp-img-auto-sizes-contain` (135 B) has no clean removal and is not worth one.
+
+  **Correction to rev. 3 — it broke a recommendation that was already right.** Rev. 2 gave `remove_action('wp_print_styles','print_emoji_styles')`. Rev. 3 called that "a silent no-op on 7.0.2" and replaced it with `remove_action('wp_enqueue_scripts','wp_enqueue_emoji_styles')`. Both halves of that were wrong. WordPress 7.0.2 `wp-includes/default-filters.php`:
+
+  ```php
+  add_action( 'wp_enqueue_scripts', 'wp_enqueue_emoji_styles' );
+  add_action( 'wp_print_styles', 'print_emoji_styles' ); // Retained for backwards-compatibility. Unhooked by wp_enqueue_emoji_styles().
+  ```
+
+  and `wp-includes/formatting.php`:
+
+  ```php
+  function wp_enqueue_emoji_styles() {
+      // Back-compat for plugins that disable functionality by unhooking this action.
+      $action = is_admin() ? 'admin_print_styles' : 'wp_print_styles';
+      if ( ! has_action( $action, 'print_emoji_styles' ) ) { return; }
+      remove_action( $action, 'print_emoji_styles' );
+  ```
+
+  The `wp_print_styles` hook **is** registered, and core's own comment plus that early return document unhooking it as the supported disable path. Rev. 3's replacement leaves `print_emoji_styles` hooked, so the **deprecated** function runs and prints the same rules as an unlabelled `<style>` — and fires `_deprecated_function()` on every page load under `WP_DEBUG`.
+
+  The deprecation itself is real (`@deprecated 6.4.0`); the conclusion drawn from it was not. Priority `7` on `print_emoji_detection_script` and priority `100` on the dequeues are both correct — all three style handles register at priority 10. `wp-img-auto-sizes-contain` (135 B) has no clean removal and is not worth one.
 - **Effort:** 30 min.
 - **Verification:** `curl -s <url> | grep -c global-styles-inline-css` returns 0, **and** raw HTML drops by ~25,000 B — from 218,440 B to roughly 193,000 B. Rev. 2 set the target at "<175,000 B", which its own itemisation cannot reach; an implementer following it would have gone hunting for a bug that does not exist.
 - **Risk:** low but non-zero. Check any page using a Gutenberg block or core block pattern first. Neither sampled page contains one, and `sitemap_index.xml` lists only `page-sitemap.xml` — there are no posts — which narrows the exposure further.
@@ -467,9 +527,20 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
   Chronic-Pain-Boone-NC-Neuropathy.webp                no dimensions
   ```
 
-  **That correlation is probably causal, and it changes the fix.** WordPress core declines to lazy-load images whose dimensions it cannot resolve. Adding `width`/`height` may make core add `loading="lazy"` by itself, collapsing two edits into one. Add dimensions first and re-measure before hand-adding lazy attributes. Rev. 2 listed both as separate work and claimed all 7 lacked dimensions.
+  **Rev. 3 claimed that correlation was probably causal. It is not, on this page.** The core mechanism is real — `wp-includes/media.php` in WP 7.0.2 returns early from the loading-optimization pass unless the tag already has both `width` and `height`. But it is not what governs these images. Of the **16 images that already have `loading="lazy"`, 6 have no `width`/`height` at all.** Those six carry `loading="lazy"` at the *end* of the tag and no `wp-image-NNNN` class; the ten that do have dimensions carry it *prepended*, which is core's `str_replace` signature. Beaver Builder emits lazy itself on external-URL photos. Adding dimensions will therefore **not** make lazy appear for free.
+
+  **And the 6 targets are not one editable field.** They span three plugins:
+
+  ```
+  fl-photo-img                 Chiropractic-Boone-NC-ASMST-Logo.webp        Beaver Builder photo
+  pp-video-default-thumbnail   1006263104-c80f682014e15f08…                 PowerPack video
+  uabb-new-ib-img  x4          Knee-Pain-Red, Back-Pain, Shoulder-Pain,     Ultimate Addons Info Box
+                               Neuropathy
+  ```
+
+  The four UABB Info Box images need a template override or an output filter, not an attribute edit. Rev. 3 scoped this at 20 minutes on the strength of the causal claim.
 - **Fix:** **(a)** Add `width`/`height` to the 6 that lack them, then check whether lazy appears on its own. Leave the ribbon eager if it is above the fold — but strip its `fetchpriority` (H4). **(b)** YouTube facade for the 35 thumbnails: `lite-youtube-embed` (~3 KiB JS + ~1 KiB CSS, Apache-2.0, no dependencies). See `audit/03` §3.
-- **Effort:** (a) 20 min. (b) 2-3 hrs for 35 replacements, or 1-2 hrs via WP YouTube Lyte if its shortcode renders inside BB text modules.
+- **Effort:** (a) **1-2 hrs** — one BB photo module, one PowerPack module, and four UABB Info Box images needing a template override or filter. Rev. 3 said 20 minutes on the strength of the withdrawn causal claim. (b) 2-3 hrs for 35 replacements, or 1-2 hrs via WP YouTube Lyte if its shortcode renders inside BB text modules.
 - **Verification:** zero `i.ytimg.com` requests on load; `Defer offscreen images` savings under 100 KiB.
 - **Worth more than it looks:** the gallery is a PowerPack module and is what pulls `swiper.min.js` (143,660 B raw, 1,497 ms CPU). After the facade, check whether Swiper still enqueues — see M4.
 
@@ -594,7 +665,7 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
 
   `7.0.2` is the WordPress core version — the fallback when a script is enqueued with no version argument.
 - **Impact:** static assets carry `max-age=2592000`. **An edit to the child theme's `style.css` will not reach a returning visitor for 30 days**, or until WordPress core updates for unrelated reasons. Anyone making CSS fixes here will watch them ship and appear not to work.
-- **Fix:** note the handle is **`fl-child-theme`** — the `fl-` prefix means the **parent** theme registered it. BB Theme auto-enqueues the child stylesheet, so enqueuing it again from the child produces a duplicate or a no-op. Rev. 2 recommended exactly that. The working routes are:
+- **Fix — and the mechanism here is inferred, not verified.** The handle is `fl-child-theme`. The `fl-` prefix is the parent theme's namespace, which *suggests* BB Theme registers the child stylesheet itself; if so, enqueuing it again from the child is a duplicate or a no-op, and rev. 2's advice was wrong. But BB Theme's parent is premium and not publicly readable, and Beaver Builder's own published starter child theme does the opposite — it enqueues under handle `child-style` with an explicit version. **Check `bb-theme-child/functions.php` before choosing.** If the child registers it, adding a `$ver` argument is the whole fix. If the parent registers it, use one of:
   - dequeue and re-register under the same handle at a late priority with `filemtime()` as the version, or
   - a `style_loader_src` filter that rewrites the `ver` parameter for that handle.
 
@@ -645,7 +716,7 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
 **L4: Six images missing explicit width and height**
 
 - **Evidence:** of the 7 images lacking `loading="lazy"`, **6 also lack `width`/`height`** — the award ribbon carries `width="500" height="792"` and is the exception. They contribute 0.000 to CLS in the current run but are latent shift sources. Rev. 2 said all 7 lacked dimensions.
-- **Fix:** covered by H8(a) — and adding dimensions may make core add lazy-loading by itself.
+- **Fix:** covered by H8(a). Rev. 3 suggested dimensions might make core add lazy-loading for free; that claim is withdrawn — see H8. Both attributes have to be added deliberately, and four of the six sit in Ultimate Addons Info Box output.
 
 ---
 
@@ -739,16 +810,16 @@ Ordered by value per hour, with C0 early because its outcome may make later step
 
 | # | Task | Finding | Time | Verification |
 |---|---|---|---|---|
-| **1** | **BB hero row → Show Video On Mobile = No** | C1-A | 5 min | Mobile UA: no `hiking.mp4`/`hiking.webm` request, no `<video>` in `.fl-bg-video` |
-| 2 | Child-theme rule sizing `.fl-bg-video video` to 100%/100% with `object-fit:cover` | C1-B | 15 min | Desktop UA: CLS ≤ 0.1; no non-zero shift listed |
+| **1** | **BB hero row → Show Video On Mobile = No** | C1-A | 5 min | Mobile UA: **no `hiking.mp4`/`hiking.webm` request**; LCP element is the fallback WebP. A `<video src="">` remains — do not check for its absence |
+| 2 | Child-theme rule sizing `.fl-bg-video video` to 100%/100%, **every declaration `!important`** | C1-B | 15 min | Desktop UA: CLS ≤ 0.1; no non-zero shift listed; computed width/height survive a window resize |
 | 3 | **Establish 10Web Booster's state** — off, cache-not-warm, or dead | C0 | 30 min | `grep -oE '<script[^>]+(defer\|async)' \| wc -l` > 0, or the plugin is gone |
 | 4 | `preconnect` to `chiro.inceptionimages.com`; background-image on `.fl-bg-video`; poster preload | C1-C, H5 | 20 min | Hint present; poster paints before video bytes arrive |
 | 5 | Dequeue `global-styles`, `wp-block-library`, `classic-theme-styles`, emoji — **on `wp_enqueue_scripts`** | H7 | 30 min | `grep -c global-styles-inline-css` → 0; raw HTML ≈193,000 B |
-| 6 | `width`/`height` on the 6 images; re-check whether core adds lazy itself | H8a, L4 | 20 min | 6 images carry dimensions; count lazy images before and after |
+| 6 | `width`/`height` + `loading="lazy"` on the 6 images — BB photo ×1, PowerPack ×1, **UABB Info Box ×4 (template override or output filter)** | H8a, L4 | 1-2 hrs | All 6 carry dimensions and lazy |
 | 7 | Move `fetchpriority="high"` off the ribbon via a core filter — **do with step 6** | H4 | 30 min | Zero `fetchpriority="high"`, or exactly one, on the poster |
 | 8 | `&display=swap`; `dns-prefetch` → `preconnect` for `fonts.googleapis.com` | M5 | 15 min | Webfont audit passes |
 | 9 | **Re-measure: 3 Lighthouse runs, median. Re-run both sweep passes.** | — | 45 min | Establishes a real baseline |
-| 10 | `defer` the three ReviewWave scripts | H2 | 30 min | Savings drop toward 2,510 ms **and** the chat widget opens and submits |
+| 10 | `defer` the three ReviewWave scripts | H2 | 30 min | Render-blocking savings **≤ 200 ms** (they are 2,510 ms today) **and** the chat widget opens and submits |
 | 11 | UserWay: plugin setting if one exists, else idle + `{timeout:3000}` | H3 | 15-90 min | UserWay blocking <200 ms **and** widget appears within 5 s |
 | 12 | Child-theme `style.css` versioning via dequeue/re-register or `style_loader_src` | M6 | 20 min | `?ver=` shows a timestamp **and** changes after an edit |
 | 13 | Pre-warm: cron'd `curl` loop over `page-sitemap.xml` | M1 | 15 min | Sweep shows `hit` on first pass for most URLs |
@@ -764,9 +835,9 @@ Ordered by value per hour, with C0 early because its outcome may make later step
 | 23 | Add a CDN — **after step 22** | M7 | 1-2 hrs | CDN headers present |
 | 24 | **Re-measure** | — | 45 min | Compare against step 15 |
 
-**Steps 1-8 total about 2 hours 45 minutes**, of which **the first two are 20 minutes and carry most of the value** on the measured mobile profile. None of the eight requires design approval, a plugin install, or a page rebuild.
+**Steps 1-8 total about 3 hours 25 minutes to 4 hours 25 minutes**, of which **the first two are 20 minutes and carry most of the value** on the measured mobile profile. None of the eight requires design approval, a plugin install, or a page rebuild. (Step 6 grew from 20 min to 1-2 hrs in rev. 4 — see H8.)
 
-**Steps 1-24 total roughly 16-20 hours.** Steps 17 and 23 are the largest. There is no configuration path to a green Lighthouse score — steps 16, 17, and DOM reduction are the ceiling-lifting work, and even then 70+ mobile would require removing third parties entirely.
+**Steps 1-24 total 14.8-20.0 hours** — the sum of the per-step figures above, not a rounded guess. (Rev. 3 said "16-20 hours"; its own per-step figures summed to 14.1-18.3.) Steps 17 and 23 are the largest. There is no configuration path to a green Lighthouse score — steps 16, 17, and DOM reduction are the ceiling-lifting work, and even then 70+ mobile would require removing third parties entirely.
 
 ### Rollback
 
@@ -799,11 +870,14 @@ Ordered by value per hour, with C0 early because its outcome may make later step
 1. **No Lighthouse run accompanies this revision.** Chrome cannot start here — the cached Puppeteer build is missing roughly 20 shared libraries, and installing them was out of scope. Every **[LH]** figure is carried forward from 2026-07-30 18:13 EDT.
 2. **Lighthouse figures are single runs and the variance is large.** Two runs of the unmodified site differed by 6 score points, 3.0 s of LCP, 3,810 ms of TBT, and 3.2× of reported payload. Payload varies most because the browser aborts the hero video download at a different point each time. Re-measure with 3+ runs and compare medians.
 3. **Cold-cache TTFB is also highly variable.** Two sweeps of identical content 78 minutes apart gave MISS medians of 0.845 s and 1.788 s, maxima of 2.654 s and 4.946 s, and **disjoint** lists of the five slowest pages. Any per-page cold-cache claim is noise. The warm path — 0.052-0.113 s across 90 requests — is stable.
+   *Method:* medians are the lower-middle value (sweep 1, n=44, true median 0.8577) and p90 is `sorted[int(0.9*(n-1))]`. Both are stated so the figures are reproducible; neither convention changes the 2.1× ratio the finding rests on.
 4. **Desktop was not measured.** The 2026-07-28 original reported 47/100 desktop from a single run. No desktop figure has been captured since, and that matters more in this revision than before: C1-A applies only to mobile, and C1-B is the desktop-side fix.
 5. **10Web's configuration state is inferred, not observed.** C0 lists three explanations and cannot distinguish them without wp-admin access.
-6. **Two pages sampled for source inspection, not 44.** Facts marked site-wide (H7, H2's zero-`defer` count, M6, L1) were confirmed on both `/` and `/knee-pain-lp/`. Header facts come from all 44 URLs across two sweeps.
-7. **C1-A's mobile gate is user-agent based.** BB's `_isMobile()` tests `navigator.userAgent`. It fires under Lighthouse's Moto G emulation and on real phones, but a desktop browser at a narrow viewport still gets the video. This is a device-class fix, not a viewport-width fix.
-8. **No competitor measurements.** Thresholds cited are Google's published Core Web Vitals values. No competitor sites were tested and no ranking or conversion outcomes are projected — page speed is a documented but minor ranking signal, and the case for this work is user experience.
+6. **Beaver Builder's behaviour was read, not executed.** Every claim in C1 is quoted from `2-layout.js` and `2-layout.css` on the origin. No browser ran that code in this environment. Three specific consequences are inference and are labelled as such in C1-A: that `loadedmetadata` will not fire with `src=""`, that the fallback WebP becomes the LCP element on mobile, and that the empty-`src` document fetch is harmless. Verify all three in DevTools on the first pass.
+7. **M6's mechanism is unverified.** BB Theme's parent is premium and not readable from outside; the fix depends on which file registers `fl-child-theme`.
+8. **Two pages sampled for source inspection, not 44.** Facts marked site-wide (H7, H2's zero-`defer` count, M6, L1) were confirmed on both `/` and `/knee-pain-lp/`. Header facts come from all 44 URLs across two sweeps.
+9. **C1-A's mobile gate is user-agent based.** BB's `_isMobile()` tests `navigator.userAgent`. It fires under Lighthouse's Moto G emulation and on real phones, but a desktop browser at a narrow viewport still gets the video. This is a device-class fix, not a viewport-width fix.
+10. **No competitor measurements.** Thresholds cited are Google's published Core Web Vitals values. No competitor sites were tested and no ranking or conversion outcomes are projected — page speed is a documented but minor ranking signal, and the case for this work is user experience.
 
 ---
 
@@ -819,6 +893,21 @@ Ordered by value per hour, with C0 early because its outcome may make later step
 
 ## Revision History
 
+**rev. 4, 2026-07-31** — rev. 3 was reviewed by a fourth adversarial critic, chartered against rev. 3's *own new* reasoning rather than the material three earlier critics had already checked. It found four defects, all in code-derived claims added by rev. 3.
+
+| rev. 3 | rev. 4 |
+|---|---|
+| C1-A: "Show Video On Mobile = No **skips the append entirely**", verified by "no `<video>` inside `.fl-bg-video`" | `wrap.append(videoTag)` appears in **both** branches. The else-branch sets `src=""` — which stops both `<source>` children being fetched — and appends the element anyway. The verification would have reported failure on a correct fix. Rewritten, with a table of what actually changes. |
+| C1-B: this CSS makes BB's two sizing passes "**no-ops**" | Both passes are jQuery `.css()` — inline style writes — re-applied on a debounced `resize`. Every declaration now carries `!important`, and the word "no-ops" is gone. |
+| H8/L4: adding `width`/`height` "**may make core add `loading="lazy"` by itself**" | Refuted by six counterexamples on the same page — 6 of the 16 already-lazy images have no dimensions. BB emits lazy itself on external-URL photos. Effort re-scoped 20 min → 1-2 hrs: the 6 targets span BB, PowerPack, and UABB Info Box templates. |
+| H7: "`remove_action('wp_print_styles','print_emoji_styles')` is a **silent no-op**"; use `wp_enqueue_emoji_styles` instead | **Backwards.** WP 7.0.2 still registers that hook, and `wp_enqueue_emoji_styles()` early-returns when it is unhooked — core's own comment calls it the back-compat disable path. Rev. 3's replacement leaves the deprecated function hooked and the CSS printed. Reverted to rev. 2's version, which was right. |
+| "removes **62%** of mobile payload" | 60.7%. 62.4% is the whole `inceptionimages.com` host including a footer image the setting does not touch. Four places. |
+| C1-C bundled a `preconnect` with the poster preload | The poster is first-party and already connected. The preconnect serves H5 (the video host) and is **inert on mobile** once C1-A ships. Now said. |
+| M6: "the `fl-` prefix means the **parent** registered it" | Inferred from a name, stated as fact. BB Theme's parent is not publicly readable, and BB's own starter child theme enqueues under a different handle with an explicit version. Downgraded to "check `functions.php` first," with both fixes given. |
+| "Steps 1-24 total roughly 16-20 hours" | Its own per-step figures summed to 14.1-18.3. Now 14.8-20.0 with step 6 re-scoped. |
+| Step 10 verification: "savings drop toward 2,510 ms" | 2,510 ms is the *current* figure. Target is ≤ 200 ms. |
+| `audit/03` labelled rev. 3 | It still prescribed both remedies this revision withdrew — LSCache-for-the-crawler and `max-age=3600` — and three of its four step cross-references were wrong. Corrected in the same pass. |
+
 **rev. 3, 2026-07-30** — rev. 2 was reviewed by three independent adversarial critics. Its measurements survived; its recommendations did not.
 
 | rev. 2 | rev. 3 |
@@ -826,7 +915,7 @@ Ordered by value per hour, with C0 early because its outcome may make later step
 | **H5: a Google Maps iframe loads eagerly in live DOM** | **False. The iframe carries `loading="lazy"`.** Rev. 2 classified iframes on `src` vs `data-src` and truncated each element before the deciding attribute. Finding withdrawn; H5 reassigned to the genuinely missing resource hint for the LCP host. The dependent claim that 3,820 ms was "a floor" is withdrawn too. |
 | C1-A: "set an explicit row height, or `aspect-ratio` on `.fl-bg-video`. Removes all of CLS." | Both inert. The row already has padding-derived height at all three breakpoints; `.fl-bg-video` is `position:absolute` with all insets `0`, so `aspect-ratio` is ignored. The shift is BB's `loadedmetadata` re-size. The fix is a CSS rule on `.fl-bg-video video`. |
 | C1-C: "a preload lets the browser fetch the poster during the blocking window" | Preload warms the HTTP cache and paints nothing — BB applies the fallback as a `background-image` on the `<video>` it creates in JS. Needs a companion CSS rule on `.fl-bg-video`, which *is* in the served HTML. |
-| Recommended A+B+C; the option list omitted the mobile gate | **`data-video-mobile="yes"` was quoted in rev. 2's own evidence block and never used.** Setting it to No removes 62% of mobile payload, the LCP element, and the CLS contributor, in one dropdown. Now step 1. |
+| Recommended A+B+C; the option list omitted the mobile gate | **`data-video-mobile="yes"` was quoted in rev. 2's own evidence block and never used.** Setting it to No stops both video files being fetched — 60.7% of payload — in one dropdown. Now step 1. |
 | C0: "REST namespaces register only for active plugins" | Over-general — mu-plugins register routes with no activation state, and `/wp-content/mu-plugins/` exists here. Reworded to "the code is loaded," with two alternative explanations added, one of which would reorder the sequence. |
 | C0 verification: `grep -c 'defer\|async'` > 0 | **Returns 25 on the unmodified site** — core emits `decoding="async"` on 23 images and `grep -c` counts lines. Replaced with a pattern matching script tags only. |
 | H4: remove `fetchpriority` via "BB photo module → Advanced" | It is emitted by WordPress core, not BB. Retargeted to a core filter and coupled to H8 — otherwise core moves the attribute to the next non-lazy image and H4's check passes anyway. |
