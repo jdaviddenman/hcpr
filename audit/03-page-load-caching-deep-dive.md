@@ -1,8 +1,8 @@
 # Page Load, Caching & Third-Party Deep-Dive: highcountrypainrelief.com
 
-**Date:** 2026-07-30 (supersedes 2026-07-28)
+**Date:** 2026-07-30 (rev. 3 — supersedes rev. 2 and rev. 1 of the same date, and the 2026-07-28 original)
 **Scope:** caching layers, third-party behaviour, and the YouTube facade. Metric findings and the remediation sequence live in `audit/01-page-speed-performance-audit.md`; this document does not restate them.
-**Evidence:** `audit/data/header-sweep-2026-07-30.tsv`, `audit/data/lighthouse-mobile-2026-07-30.md`
+**Evidence:** `audit/data/header-sweep-2026-07-30.tsv` (run 1), `audit/data/header-sweep-2026-07-30-run2.tsv` (run 2), `audit/data/lighthouse-mobile-2026-07-30.md`
 
 > **Method note.** The superseded version of this document verified headers with `curl -sI` (HEAD). This LiteSpeed server omits `content-encoding` from HEAD responses, which produced a false "HTML is uncompressed" finding. Every header claim below is from a **GET**. See `audit/data/README.md`.
 
@@ -13,10 +13,10 @@
 | Domain | Service | Cache-Control | Verified | Problem? |
 |---|---|---|---|---|
 | `highcountrypainrelief.com` — **HTML** | WordPress pages | **none** | GET sweep, 44/44 URLs | **YES.** No `Cache-Control` on any HTML response. No visitor caches the document. Server-level LiteSpeed cache is active (`x-litespeed-cache`), Brotli is applied, and `ETag` is present — but browser-side HTML caching is entirely absent. |
-| `highcountrypainrelief.com` — **static** | CSS, JS, fonts, images | `public, max-age=2592000` + `content-encoding: br` | 4 assets sampled | No — correctly configured. 30-day cache and Brotli both working. **No `ETag`**, so revalidation falls back to `Last-Modified` (1-second granularity). |
+| `highcountrypainrelief.com` — **static** | CSS, JS, fonts, images | `public, max-age=2592000` + `content-encoding: br` | 6 assets sampled | No — correctly configured. 30-day cache and Brotli both working. **No `ETag`**, so revalidation falls back to `Last-Modified` (1-second granularity). |
 | `chiro.inceptionimages.com` | Practice imagery + hero video | `public, max-age=2592000` | direct GET on `hiking.mp4`, `hiking.webm` | No — 30 days, confirmed. This is a **separate host** (`18.214.60.67`) from the main origin (`44.223.213.21`), not the same server. The superseded audit left this unresolved and described it as the same origin; both were wrong. |
 | `i.ytimg.com` | YouTube thumbnails | `public, max-age=7200` | direct GET | **YES**, but not for the cache TTL. 35 thumbnails load eagerly on every page view, 457.8 KiB. A 2-hour TTL means repeat visitors revalidate; the real cost is 35 requests on first visit. Facade eliminates the requests entirely — see §3. |
-| `googletagmanager.com` | GTM + gtag | short TTL by design | Lighthouse | **YES**, but for size, not caching. 275 KiB and 1,165 ms of main-thread blocking. Short TTL is intentional and correct; the container is the problem. See audit 01 H3. |
+| `googletagmanager.com` | GTM + gtag | short TTL by design | Lighthouse | **YES**, but for size, not caching. 275 KiB and 1,165 ms of main-thread blocking. Short TTL is intentional and correct; the container is the problem. See audit 01 H6. |
 | `cdn.userway.org` | Accessibility widget | `max-age=3600, public` | direct GET | Low. 1-hour browser cache is reasonable for a widget. 137 KiB and 2,443 ms blocking are the issue, not the TTL. |
 | `cdn.reviewwave.com` | Reviews + chat | S3 + CloudFront | — | Low. 16 KiB, 196 ms blocking. |
 | `rw-embed-data.s3.amazonaws.com` | ReviewWave config JS | **none** — no `Cache-Control` at all | direct GET, 2026-07-30 | **YES, twice over.** `Content-Length: 56,589` (55.3 KiB, matching Lighthouse exactly) and **no `Content-Encoding`** — the same 56,589 bytes are returned whether or not `gzip` is requested. It is the only entry in Lighthouse's text-compression audit (36.6 KiB available) and the single largest render-blocking resource at 1,570 ms. It also carries **no `Cache-Control`**, so browsers do not cache it between visits; `ETag` and `Last-Modified` are present, so revalidation works but costs a round trip every time. None of this is fixable from this site — the S3 object metadata belongs to ReviewWave. The available fix is to `defer` the script so it stops blocking first paint. |
@@ -32,7 +32,7 @@
 2. **The page cache is cold, not missing.** See §2.
 3. **Static assets have no `ETag`.** Working 30-day cache, but revalidation is coarser than it needs to be.
 4. **35 YouTube thumbnails on a 2-hour TTL.** Fix by not requesting them — §3.
-5. **No CDN.** Both hosts serve directly from AWS EC2. Lower priority than it appears given 52-73 ms warm TTFB.
+5. **No CDN.** Both hosts serve directly from AWS EC2. Lower priority than it appears given 52-113 ms warm TTFB — but note it does nothing for a cache MISS, which is the path that actually costs seconds.
 
 ---
 
@@ -40,25 +40,40 @@
 
 This is the correction that matters most in this document. The superseded version claimed there was no page caching and that every request cost 2,540 ms. Neither holds.
 
-### Measured, all 44 sitemap URLs, two passes each
+### Measured, all 44 sitemap URLs, two passes each — twice, 1 h 18 min apart
 
 ```
-cache state    44/44  MISS on 1st request, HIT on 2nd
-content-encoding 44/44  br        raw 5,874,729 B -> 1,097,229 B  (81% saved)
-cache-control  44/44  absent on HTML
-etag           44/44  present
-vary           44/44  Accept-Encoding,User-Agent
+                            run 1                    run 2
+cache state, pass 1    44/44 MISS               42/44 MISS, 2 HIT
+cache state, pass 2    44/44 HIT                44/44 HIT
+content-encoding       44/44 br  (81% saved)    44/44 br  (81.3% saved)
+cache-control          44/44 absent on HTML     44/44 absent
+etag                   44/44 present            44/44 present
+vary                   44/44 Accept-Encoding,User-Agent  (both)
+size_raw total         5,874,729 B              5,874,729 B   <- identical content
 
-TTFB  MISS   min 0.406  median 0.845  mean 1.204  p90 2.277  max 2.654 s
-TTFB  HIT    min 0.052  mean  0.059                          max 0.073 s
-                                                        ratio 20.2x
+TTFB MISS   min 0.406  median 0.845  mean 1.204  p90 2.277  max 2.654 s   (run 1)
+TTFB MISS   min 0.475  median 1.788  mean 2.231  p90 4.293  max 4.946 s   (run 2)
+TTFB HIT    0.052-0.073 s (run 1)   0.053-0.113 s (run 2)   <- stable
 ```
 
-Every page was cold. Every page warmed on the second request and served in 52-73 ms.
+Nearly every page was cold. Every page warmed on the second request and served in **52-113 ms** across all 90 warm observations.
 
-**Where the 2,540 ms came from.** It is a real number from the MISS distribution — near its p95. It was measured, not invented. It was then generalised to "every page load," which the data does not support. Lighthouse's TTFB in the current run is **700 ms, 4% of LCP, and passing**.
+**The cold path is worse and far less predictable than a single sweep suggests.** Run 2's MISS median is 2.1× run 1's and its maximum is 1.9× — on byte-identical content. More usefully: **the two runs share none of their five slowest pages.**
 
-**Why it still matters.** A brochure site for a local practice has low per-page traffic. Cache entries expire before the next visitor arrives, so a real first visitor to `/knee-pain-lp/` genuinely pays 2.3 s. The problem is real; the diagnosis and therefore the fix were wrong.
+| Run 1 slowest on MISS | Run 2 slowest on MISS |
+|---|---|
+| `/hipaa-privacy-policy/` 2.654 s | `/contact-us/` 4.946 s |
+| `/accessibility/` 2.537 s | `/testimonials/` 4.936 s |
+| `/pain-management-center/` 2.460 s | `/office-tour/` 4.738 s |
+| `/terms-service/` 2.408 s | `/chiropractic-care/` 4.589 s |
+| `/knee-pain-lp/` 2.317 s | `/anti-discrimination/` 4.341 s |
+
+Which page is slowest on a cache miss is not a property of the page. An earlier revision of this document listed run 1's five as though they were a finding about those pages; that claim is withdrawn. What survives — and holds across both runs — is the shape: nearly every page cold, seconds on the cold path, milliseconds on the warm one.
+
+**Where the 2,540 ms came from.** It is a real number from the MISS distribution — it sits between sweep 1's p90 (2.277 s) and its maximum (2.654 s), and below sweep 2's p90 entirely. It was measured, not invented. It was then generalised to "every page load," which the data does not support. Lighthouse's TTFB in the current run is **700 ms, 4% of LCP, and passing** — one sample of a distribution that spans 0.406 s to 4.946 s across 86 cold requests.
+
+**Why it still matters.** A brochure site for a local practice has low per-page traffic. Cache entries expire before the next visitor arrives, so a real first visitor to *some* page genuinely pays seconds — 86 of 88 first requests across the two sweeps were cold, and the cold path spans 0.406 s to 4.946 s. Which page pays the most is not predictable, so pre-warming has to cover the whole sitemap rather than a shortlist. The problem is real; the original diagnosis and therefore the original fix were wrong.
 
 **Fix: pre-warm and hold, not "install a page cache."**
 
@@ -119,7 +134,7 @@ If WP YouTube Lyte is preferred, enable "Cache thumbnails locally" so the poster
 ### Measured gain
 
 - **457.8 KiB** deferred per page load, **35 requests** eliminated
-- Lighthouse "Defer offscreen images" drops from 758.5 KiB toward ~300 KiB (the remainder is first-party images — see audit 01 H4(a))
+- Lighthouse "Defer offscreen images" drops from 758.5 KiB toward ~300 KiB (the remainder is first-party images — see audit 01 H8(a))
 - DOM element reduction from replacing 35 overlay structures
 - No cache-expiry exposure, since nothing is requested until a click
 
@@ -179,12 +194,25 @@ If WP YouTube Lyte is preferred, enable "Cache thumbnails locally" so the poster
 | ReviewWave `chat_embed.js` | cdn.reviewwave.com | sync `<head>` | 11 ms | 7 KiB | **150 ms** |
 | ReviewWave config | rw-embed-data.s3… | sync `<head>` | 14 ms | 56 KiB | **1,570 ms** |
 | YouTube thumbnails ×35 | i.ytimg.com | eager CSS bg | 0 ms | 459 KiB | — |
+| Google Maps embed | google.com/maps | `<iframe loading="lazy">` | 0 ms | 0 on load | **no action** |
 | Google Fonts CSS | fonts.googleapis.com | sync | 0 ms | 1 KiB | **790 ms** |
 | Font files ×2 | fonts.gstatic.com | — | 0 ms | 55 KiB | — |
 | Vimeo thumbnail | i.vimeocdn.com | eager | 0 ms | 15 KiB | — |
 | hero video | chiro.inceptionimages.com | CSS bg video | 0 ms | 3,112 KiB | — |
 
-**Third-party main-thread blocking: 3,820 ms.** UserWay 2,443 ms (64%), GTM 1,165 ms (30%), ReviewWave 196 ms (5%), S3 14 ms.
+**Third-party main-thread blocking measured by Lighthouse: 3,820 ms.** UserWay 2,443 ms (64%), GTM 1,165 ms (30%), ReviewWave 196 ms (5%), S3 14 ms.
+
+**Correction, rev. 3.** Rev. 2 added a Google Maps row to this table marked "eager `<iframe>`, live DOM, unmeasured" and concluded that the 3,820 ms total was therefore "a floor, not a total." **Both claims are withdrawn.** The Maps iframe carries `loading="lazy"`:
+
+```html
+<iframe src="https://www.google.com/maps/embed?pb=…" width="100%" height="300"
+        style="border:0;" allowfullscreen="" loading="lazy"
+        referrerpolicy="no-referrer-when-downgrade">
+```
+
+Rev. 2's classification examined every iframe on `src` vs `data-src` and truncated each element before the attribute that decided the question. Verified in rev. 3 with three independent patterns.
+
+The iframe census itself stands: 39 iframes, **35 carry `data-src`** (deferred), **4 carry a real `src`** — the GTM noscript pixel, two `player.vimeo.com` iframes inside an inert `<script type="text/html" class="pp-video-lightbox-content">` template, and the lazy Maps embed. **§3's claim that Vimeo is already lightbox-deferred is correct**, and independently confirmed: `html.parser` sees 37 iframes because it treats `<script>` content as CDATA and cannot see the two inside the template, while a regex sees 39.
 
 **Corrections to the superseded table.** It listed GTM as "4 KB, minimal, already async — OK, 0 savings." GTM is 275 KiB and blocks 1,165 ms — the second-largest third-party cost on the page. It also listed per-row savings summing to roughly 9,400 ms beneath a stated total of 3,000-5,000 ms; the rows and the total contradicted each other. And it attributed 13,467 ms to "BB layout.js × 2" as a third-party item — `2-layout.js` is first-party BB output, not a third party, and is now reported in audit 01 C2.
 
@@ -196,8 +224,8 @@ If WP YouTube Lyte is preferred, enable "Cache thumbnails locally" so the poster
 
 | Layer | Current | Target |
 |---|---|---|
-| **CDN** | none — both hosts on AWS EC2, no CDN headers | Cloudflare free or QUIC.cloud. Low priority: warm TTFB is already 52-73 ms |
-| **Page cache** | active at server level, **cold on 44/44 pages** | Same cache, pre-warmed by the LSCache crawler. 7-day public TTL, 24 h front page |
+| **CDN** | none — both hosts on AWS EC2, no CDN headers | Cloudflare free or QUIC.cloud. Low priority: warm TTFB is already 52-113 ms |
+| **Page cache** | active at server level, **cold on 42-44 of 44 pages across two sweeps** | Same cache, pre-warmed by the LSCache crawler. 7-day public TTL, 24 h front page |
 | **HTML `Cache-Control`** | **absent on 44/44** | `public, max-age=3600` |
 | **HTML compression** | **Brotli, working** — 81% saved | no change |
 | **Static compression** | **Brotli, working** | no change |
@@ -212,8 +240,8 @@ The superseded document gave three different positions on static asset TTL acros
 
 ## 7. Where the Sequence Lives
 
-The consolidated, ordered implementation sequence is **§7 of `audit/01-page-speed-performance-audit.md`**. It is not repeated here.
+The consolidated, ordered implementation sequence is **§8 of `audit/01-page-speed-performance-audit.md`**. It is not repeated here.
 
 The superseded documents each carried their own sequence, and they disagreed — 17 steps totalling "~10-14 hours" in one, 15 steps totalling "~6-8 hours" in the other, for substantially the same work, with per-step times that summed to neither figure. One sequence, in one place, is the fix.
 
-Caching-specific items in that sequence: **step 10** (LSCache plugin, `fl_builder` exclude, crawler), **step 11** (`Cache-Control` on HTML), **step 15** (static ETag), **step 16** (CDN).
+Caching-specific items in that sequence: **step 13** (LSCache plugin, `fl_builder` exclude, crawler), **step 14** (`Cache-Control` on HTML), **step 18** (static ETag), **step 20** (CDN).

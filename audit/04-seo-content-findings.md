@@ -1,6 +1,6 @@
 # On-Page SEO & Content Findings: highcountrypainrelief.com
 
-**Date:** 2026-07-28 | **Re-verified against the live site:** 2026-07-30
+**Date:** 2026-07-28 | **Re-verified against the live site:** 2026-07-30 (twice — content findings, then the security register)
 
 **Scope note:** these findings were identified during the site crawl and are **outside page speed scope**. Page speed lives in `audit/01-page-speed-performance-audit.md`.
 
@@ -106,19 +106,20 @@ Yoast SEO v28.1 is installed and configured on most pages. Homepage metadata is 
 
 ---
 
-## Security Findings — Unverified
+## Security Findings
 
-These were collected during the crawl and are recorded for follow-up. **None have been independently verified**, and at least one citation does not match its CVE ID. Treat this as a research starting point, not a finding list.
+Two items in this register were verified on 2026-07-30 and have moved out of "unverified" — one confirmed, one refuted. The CVE rows below remain **unverified**, and at least one citation does not match its CVE ID. Treat those as a research starting point, not a finding list.
 
 | Item | Status |
 |---|---|
-| No HTTP security headers | Not re-checked. `Strict-Transport-Security`, `Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` were reported absent. Severity for a marketing site with no PHI transmission is low-to-moderate. |
-| `xmlrpc.php` exposed via RSD link | Not re-checked. |
+| No HTTP security headers | **CONFIRMED 2026-07-30**, on `/` and `/knee-pain-lp/`. `Strict-Transport-Security`, `Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, and `Cross-Origin-Opener-Policy` are all absent on both. Severity for a marketing site with no PHI transmission is low-to-moderate. Detail and remediation: `audit/05-architecture-and-code-quality.md` A3. |
+| `xmlrpc.php` exposed via RSD link | **REFUTED 2026-07-30.** `/xmlrpc.php` returns **403**, as does `/readme.html`. `/wp-login.php` returns 302 to `/not_found` and `/?author=1` returns 301 to the homepage — Solid Security Pro is hardening these paths. The RSD `<link>` may still be emitted in `<head>`, but it points at a blocked endpoint. Item closed. |
+| REST API user enumeration | **NEW, CONFIRMED 2026-07-30.** `GET /wp-json/wp/v2/users` returns 200 with user id 1, slug `inception` — the one path Solid Security is not hardening. `audit/05` A2. |
 | CVE-2026-27212 — Swiper 8.4.7, claimed CVSS 9.5 | **Citation does not resolve to a CVE record** — the supplied link is a generic Snyk package page. Swiper 8.4.7 is confirmed loaded on the homepage (`swiper.min.js?ver=8.4.7`, 1,497 ms CPU). Verify the CVE against NVD before acting. |
 | CVE-2025-8897 — Beaver Builder, claimed Reflected XSS | **Citation mismatch:** the supplied URL ends in `CVE-2025-11726`, a different identifier. One of the two is wrong. |
 | CVE-2025-39442 — ReviewWave CSRF→Stored XSS, claimed unpatched | Not verified. If genuinely unpatched, "zero CVEs" is unreachable while ReviewWave remains installed. |
 | CVE-2024-5020 — Fancybox 3.5.x Stored XSS | Not verified. |
-| Plugin versions | The original inventory listed Ultimate Addons for Beaver Builder at version 2.10.3 — identical to Beaver Builder's version, while its own CVE rows reference a `≤1.5.9` affected range. The version is probably a copy-paste error. Re-inventory before assessing. |
+| Plugin versions | **Partly resolved.** `audit/05-architecture-and-code-quality.md` §2 re-inventoried the platform: WordPress 7.0.2 is current, Yoast 28.1 is current, Beaver Builder is 2.10.3, PowerPack is 2.40.1.6. **Ultimate Addons' version still cannot be determined from the frontend** — its only asset carries `?ver=7.0.2`, which is the WordPress core fallback for a script enqueued with no version argument, not the plugin's version. The "2.10.3" in the original inventory was a misread of a `?ver=` string. Re-inventory from wp-admin before assessing the `≤1.5.9` CVE range. |
 
 **On remediation effort:** the original audit listed "Update Swiper 8.4.7 → 12.1.2+ | 30 min" as a quick win. Swiper is a JavaScript library bundled inside a Beaver Builder addon, not an independently updatable WordPress plugin. It cannot be upgraded without updating its parent plugin, and 8 → 12 crosses four major versions with breaking API changes. The same applies to Fancybox 3.5.7. Neither is a 30-minute task.
 
