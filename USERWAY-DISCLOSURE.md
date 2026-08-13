@@ -1,58 +1,61 @@
 # Coordinated disclosure to UserWay — unauthenticated `/debug` endpoint
 
-**Prepared:** 2026-08-13 · **Reporter to supply own contact details before sending**
-**Affected plugin:** Accessibility by UserWay (`userway-accessibility-widget`), WordPress
-**Affected versions:** at least 2.4.8 through **2.6.6 (the current release)** — see below
-**Type:** unauthenticated information disclosure (CWE-200 / CWE-306: missing authentication)
+**Prepared:** 2026-08-13 · reporter to supply own contact details before sending
+**Plugin:** Accessibility by UserWay (`userway-accessibility-widget`), WordPress
+**Affected versions:** at least 2.4.8 through **2.6.6 (the current release)**
+**Type:** unauthenticated information disclosure — CWE-200 / CWE-306
+**Proposed severity:** CVSS 3.1 `AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N` = **5.3 (Medium)**
+
+Send privately to UserWay's security contact (`security@userway.org` or the channel in their security.txt /
+HackerOne). Do not open a public GitHub issue — it tips off attackers and forces a rushed close.
 
 ---
 
-## Summary
+## Report body (paste into the email)
 
-The plugin registers a REST route, `/wp-json/userway/v1/debug`, with `permission_callback` hardcoded to
-return `true`. Any unauthenticated visitor receives the site's PHP version, WordPress version, plugin
-version, UserWay account ID and **database table prefix**. The route is present and unauthenticated in the
-version WordPress.org distributes today.
+### Summary
 
-## The proof it is plugin-specific, not a site misconfiguration
+The plugin registers `GET /wp-json/userway/v1/debug` with `permission_callback` hardcoded to return
+`true`. Any unauthenticated visitor receives the site's PHP version, the live database table prefix, the
+plugin version, the WordPress version, and the UserWay account row. The sibling `/save` route, registered
+eight lines away in the same file, has a real capability check. The route is present and unauthenticated in
+the version shipping today (2.6.6).
 
-**This is the whole argument, and it needs no third-party sites: the vendor's own shipped code registers
-the route this way.**
+### What actually leaks, and why it matters
 
-Downloaded `https://downloads.wordpress.org/plugin/userway-accessibility-widget.2.6.6.zip` on 2026-08-13
-(2.6.6 is the current release, dated 2025-12-08). `includes/controller.php`, verbatim:
+Two fields are not otherwise available to an unauthenticated visitor:
 
-```php
-public function register_routes()
-{
-    register_rest_route($this->namespace, '/save', [
-        'methods'             => WP_REST_Server::CREATABLE,
-        'callback'            => [$this, 'save'],
-        'permission_callback' => [$this, 'permissions_check'],   // ← real capability check
-    ]);
+- **`php` → `phpversion()`** — the exact PHP patch version (e.g. `8.4.24`). WordPress does not expose this
+  to unauthenticated clients, and the `X-Powered-By` header is commonly stripped. It lets an attacker
+  match PHP-level CVEs to the host.
+- **`table` → `$wpdb->prefix . 'userway'`** — the live database table prefix. On a site that has changed
+  its prefix to a random value for hardening (a control WordPress security guides and plugins recommend to
+  frustrate blind SQL-injection payloads), this endpoint discloses it — e.g. `xk3f_userway` — undoing that
+  control. Confirmed from source: the value is `$wpdb->prefix`, not a constant.
 
-    register_rest_route($this->namespace, '/debug', [
-        'methods'             => WP_REST_Server::READABLE,
-        'callback'            => [$this, 'debug'],
-        'permission_callback' => function () {
-            return true;                                          // ← no check at all
-        },
-    ]);
-}
-```
+Three fields are redundant with data already public on the site, and are noted here for completeness, not
+as the basis of the report:
 
-Two routes registered eight lines apart. `/save` is protected; `/debug` is not. A site owner cannot cause
-or prevent this — it is a fixed declaration in the plugin. Because it ships in the current release, **every
-install of 2.6.6 is affected by design**, which is a stronger statement than any sample of live sites.
+- `account` (the account ID) — already emitted in the widget snippet's `data-account` on every page.
+- `wordpress` — already in the `<meta name="generator">` tag.
+- account timestamps — install metadata.
 
-`namespace` is `userway/v1`, so the full path is `/wp-json/userway/v1/debug`. The route is wired up in the
-same file:
+The `catch` block returns `$e->getTraceAsString()`, so a thrown exception would additionally disclose
+absolute server file paths. This does not fire on a healthy site, but it is a second disclosure path.
 
-```php
-add_action('rest_api_init', 'usw_register_rest_routes');
-```
+### Impact, stated at its real level
 
-## Reproduction
+This is unauthenticated information disclosure. It is **not** RCE, not SQL-injectable (the query uses a
+fixed prefix; no request input reaches SQL), not a write, and not a denial of service. It lowers the cost
+of reconnaissance for a later attack and defeats prefix-randomisation hardening. 5.3 Medium.
+
+### Precedent
+
+The same class of issue in a competing accessibility widget was assigned CVEs: **accessiBe** took
+**CVE-2025-10375** and **CVE-2025-13113** for exposing configuration data to unauthenticated users on
+public pages.
+
+### Reproduction
 
 On any site running the plugin with a configured account:
 
@@ -67,71 +70,90 @@ Returns HTTP 200 and:
  "userway":{"version":"2.4.8",
    "account":[{"preference_id":"1","account_id":"<ACCOUNT_ID>","state":"1",
                "created_time":"…","updated_time":"…"}],
-   "table":"wp_userway","tableExist":true}}
+   "table":"<PREFIX>userway","tableExist":true}}
 ```
 
-`"table":"wp_userway"` discloses the WordPress table prefix (`wp_`), which is a precondition for several
-SQL-injection payloads that would otherwise be blind.
+### Proposed fix
 
-## History in the plugin's own repository
-
-The public repository `UserWayOrg/wordpress-accessibility-plugin` shows issue **#2, "Fix debug endpoint
-declaration"** (opened 2021-10-17, closed 2021-10-21), and commit `6b64f99` "fix debug endpoint
-declaration" of the same date — where this route was last touched. No issue, pull request or advisory has
-raised it as a **security** concern.
-
-> **Note for anyone re-checking this:** the GitHub repository is not the code WordPress.org distributes.
-> The repo was last pushed 2024-06-19, its `master` is 2.5.1, and that tree contains **no REST routes at
-> all** — which can look as though the endpoint was removed. It was not. The distributed 2.6.6 `.zip`
-> still contains it. Always verify against the `.zip`, not the repo.
-
-## Suggested remediation (for the vendor)
-
-Replace the `/debug` `permission_callback` with a capability check, matching `/save`:
+Give `/debug` the same check as `/save`:
 
 ```php
-'permission_callback' => function () { return current_user_can('manage_options'); },
+register_rest_route($this->namespace, '/debug', [
+    'methods'             => WP_REST_Server::READABLE,
+    'callback'            => [$this, 'debug'],
+    'permission_callback' => function () { return current_user_can('manage_options'); },
+]);
 ```
 
-or remove the route entirely if it exists only for support tooling.
+or remove the route if it exists only for internal support tooling.
 
-## Requested
+### Requested
 
 A tracking ID or CVE assignment, and confirmation of a fixed version.
 
 ---
 
-## Establishing prevalence across other sites (optional, corroborating)
+## Evidence appendix (for the reporter, not the email)
 
-The source proof above already establishes plugin-specificity. If UserWay's triage wants live
-corroboration that the route is reachable in production across unrelated installs, it can be gathered
-**without exploitation and without collecting third parties' data**, using `audit/data/userway-debug-probe.sh`.
+### It is the plugin, not a site misconfiguration
 
-**Finding candidate installs.** The plugin — as opposed to UserWay's hand-pasted JavaScript snippet, which
-has no REST endpoint — emits a distinctive footer block. A source-code search engine (PublicWWW,
-Nerdydata) finds it with:
+Downloaded `https://downloads.wordpress.org/plugin/userway-accessibility-widget.2.6.6.zip` on 2026-08-13
+(2.6.6 is the current release, dated 2025-12-08). `includes/controller.php`, verbatim:
 
+```php
+public function register_routes()
+{
+    register_rest_route($this->namespace, '/save', [
+        'methods'             => WP_REST_Server::CREATABLE,
+        'callback'            => [$this, 'save'],
+        'permission_callback' => [$this, 'permissions_check'],   // capability check
+    ]);
+
+    register_rest_route($this->namespace, '/debug', [
+        'methods'             => WP_REST_Server::READABLE,
+        'callback'            => [$this, 'debug'],
+        'permission_callback' => function () {
+            return true;                                          // no check
+        },
+    ]);
+}
 ```
-"el.setAttribute('data-account'" "document.body.appendChild(el)" "cdn.userway.org/widget.js"
-```
 
-or, where a search index exposes REST namespaces, `"/wp-json/userway/v1"`.
+`$this->tableName = $wpdb->prefix . 'userway'` (line 33), and `debug()` returns
+`'table' => $this->tableName` and `'php' => phpversion()`. A site owner cannot cause or prevent any of
+this. Because it ships in the current release, every install of 2.6.6 is affected.
 
-**The probe.** `userway-debug-probe.sh` takes a list of candidate domains and makes **one read-only GET**
-per site to the public endpoint. It records the HTTP status and the **field names** returned as proof of
-what leaks, and **redacts the values** — account IDs and table prefixes are never stored. You are
-demonstrating that the endpoint is open and what schema it exposes, not accumulating other organisations'
-reconnaissance data.
+### There is no vendor version that fixes it
 
-```bash
-printf '%s\n' site-a.com site-b.org … > domains.txt
-bash audit/data/userway-debug-probe.sh domains.txt
-```
+Updating the plugin does not close this. The site-side mitigation is the child-theme filter in
+`SECURITY-FINDINGS.md` S1.
 
-**Boundaries observed:** one request per site; only the `/debug` route (never `/save`, the write route);
-no authentication attempted; no input submitted; values redacted. This is the same request an
-unauthenticated browser can make, gathered for the purpose of a coordinated fix.
+> **Do not trust the GitHub repository for this plugin.** `UserWayOrg/wordpress-accessibility-plugin` was
+> last pushed 2024-06-19, its `master` is 2.5.1, and that tree registers no REST routes at all — which can
+> look as though the endpoint was removed. It was not. Verify against the distributed `.zip`.
 
-> This repository did not mass-probe third-party sites to produce this report. The evidence that carries
-> the disclosure is the vendor's own distributed source. The probe is provided so UserWay, or the reporter
-> with a scope they are comfortable with, can add prevalence data if they choose.
+### No prior public report
+
+Checked 2026-08-13, nothing found: GitHub code and issue search (`userway/v1/debug`, schema strings), the
+GitHub Advisory database, WPScan (0 vulnerabilities across ~80,000 installs), the vendor repo's own tracker
+(only issue #2 "Fix debug endpoint declaration", 2021, which introduced this form — not a security
+report), HackerNews (Algolia), and the plugin's WordPress.org support forum. Reddit and StackOverflow could
+not be crawled directly and were not exhaustively checked. The endpoint is unreported as well as unfixed.
+
+### What would get this dismissed, and the pre-empt
+
+- *"Only exposes public data."* → The report leads with PHP version and table prefix, and concedes the
+  redundant fields up front.
+- *"Prefix is `wp_` anyway."* → Source shows it returns `$wpdb->prefix`, so it leaks a custom prefix too.
+- *"The endpoint is intentional."* → `/save` has a capability check; `/debug` eight lines later does not.
+- *"Info disclosure isn't a vulnerability."* → The accessiBe CVEs, same class, same product category.
+- Report hygiene: private channel, exact versions, request/response, a patch, and an honest 5.3 — not
+  "critical."
+
+### Establishing prevalence (optional, corroborating)
+
+The source proof already establishes plugin-specificity. If UserWay wants live corroboration, gather it
+without exploitation and without collecting third-party data, using `audit/data/userway-debug-probe.sh`:
+one read-only GET per supplied domain, only `/debug` (never `/save`), recording the HTTP status and the
+field names while redacting the values. Find candidate installs with a source-code search
+(PublicWWW / Nerdydata): `"el.setAttribute('data-account'" "cdn.userway.org/widget.js"`, or `"/wp-json/userway/v1"`.
