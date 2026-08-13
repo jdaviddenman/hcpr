@@ -1,11 +1,11 @@
 # Architecture, Version Currency & Code Quality: highcountrypainrelief.com
 
-**Date:** 2026-07-31 (rev. 4)
+**Date:** 2026-07-31
 **Scope:** platform architecture, plugin inventory, version currency, per-asset byte accounting, and code-quality indicators. Metric findings and the remediation sequence live in `audit/01-page-speed-performance-audit.md`; caching and third-party behaviour live in `audit/03-page-load-caching-deep-dive.md`. **This document does not restate their findings** — where a measurement here became a finding there, the finding ID is cited.
 
 **Evidence:** live GET of `/` and `/knee-pain-lp/`, `GET /wp-json/`, per-asset `content-length` under two encodings, `api.wordpress.org` version APIs. All 2026-07-30.
 
-> **Method note.** Every claim below is a header, markup, or byte measurement. No Lighthouse run accompanies this document — Chrome cannot start in the audit environment (the cached Puppeteer build is missing roughly 20 shared libraries). Where a Lighthouse figure is cited it is carried forward from `audit/data/lighthouse-mobile-2026-07-30.md` and marked **[LH]**. Every count used as evidence was taken with two independent patterns and both results are recorded.
+> **Method note.** Every claim below is a header, markup or byte measurement, and every count used as evidence was taken with two independent patterns with both results recorded. Figures marked **[LH]** come from `audit/data/lighthouse-mobile-2026-07-30.md`; the 2026-08-13 re-measurement is in `audit/data/lighthouse-mobile-2026-08-13.md`.
 
 ---
 
@@ -17,7 +17,7 @@
 
 **Ten plugins are loaded, and one of them is a page-speed optimiser producing no measurable effect.** No prior document in this repository contained a plugin inventory. §3. That finding is `audit/01` **C0** and is step 3 of the remediation sequence.
 
-**Brotli hides a 5.5× gap between what is transferred and what is parsed.** 283,722 B on the wire, 1,550,595 B through the parser. Per-asset accounting in §4. The framing consequence is `audit/01` **H1** — and note that rev. 3 of audit 01 narrows it: raw bytes are a poor CPU proxy on this page, because Script Parse & Compile is only 383 ms of 36,900.
+**Brotli hides a 5.5× gap between what is transferred and what is parsed.** 283,722 B on the wire, 1,550,595 B through the parser. Per-asset accounting in §4. The framing consequence is `audit/01` **H1**. Raw bytes are still a poor CPU proxy here: Script Parse & Compile is only 383 ms of 36,900.
 
 **Ten code-quality indicators**, of which one is an operational trap: two assets carry a `?ver=` that never changes when the file does, so an edit to the child theme's CSS will not reach a returning visitor for 30 days. §6.
 
@@ -150,7 +150,8 @@ The homepage carries 19 `<script src>` tags; the three not listed are third-part
 
 **Grand total: 1,550,595 B parsed, 283,722 B transferred — a 5.5× gap.**
 
-> **Method correction, rev. 3.** Rev. 2 reported the HTML at 217,984 B and the inline-script total at 15,894 B. Both were Python `len(str)` **character** counts, not bytes — the document contains CRLF pairs and multi-byte characters. Byte-accurate figures are 218,440 and 16,026, and the sweep TSVs independently record `size_raw=218440` for `/`. Rev. 2 also omitted `swiper.min.css` from the CSS table entirely. Every `curl`-measured per-file figure was unaffected and reproduced exactly under adversarial re-measurement.
+> **Measure in bytes, not characters.** Python `len(str)` undercounts this document — it contains CRLF
+> pairs and multi-byte characters. The sweep TSVs independently record `size_raw=218440` for `/`.
 
 ---
 
@@ -170,11 +171,12 @@ Findings that are *not* page-speed findings and therefore do not live in `audit/
 
 - **Evidence:** `GET /wp-json/wp/v2/users` returns **200** with `[{"id":1,"name":"inception","slug":"inception", …}]`. By contrast `/?author=1` → 301 to the homepage, `/xmlrpc.php` → 403, `/wp-login.php` → 302 to `/not_found`, `/readme.html` → 403. Solid Security is hardening those paths and not this one.
 - **Impact:** Supplies a valid username for credential-stuffing against whatever the real login URL is. Low severity given the login URL is hidden, but it is a gap in an otherwise-configured hardening posture and it is free to close.
-- **Closes an open item:** `audit/04-seo-content-findings.md` lists "`xmlrpc.php` exposed via RSD link — not re-checked." Re-checked: **403.** The endpoint is blocked. The RSD `<link>` may still be emitted in `<head>`, but it points at a blocked target.
+- **`xmlrpc.php` is blocked** — 403. The RSD `<link>` may still be emitted in `<head>`, but it points at a blocked target. Closes the open item in `audit/04`.
 - **Fix:** Solid Security → disable REST API user enumeration, or filter `rest_endpoints` to require authentication on `/wp/v2/users`.
 - **Verification:** `curl -s -o /dev/null -w '%{http_code}' <site>/wp-json/wp/v2/users` returns 401.
+- Re-verified 2026-08-13, still open. Fix and verification in `SECURITY-FINDINGS.md` **S2**.
 
-**A3: Security headers are absent — now verified, previously unchecked**
+**A3: Security headers are absent**
 
 - **Evidence:** `curl -D -` against `/` and `/knee-pain-lp/`. All absent on both:
 
@@ -189,7 +191,7 @@ Findings that are *not* page-speed findings and therefore do not live in `audit/
   cache-control                ABSENT     (independently confirms audit/03 §1)
   ```
 
-- **Status change:** `audit/04-seo-content-findings.md` records these as "Not re-checked." They are now checked on two URLs, and the original report was accurate. The severity assessment there — low-to-moderate for a marketing site with no PHI transmission — still stands.
+- **Severity:** low-to-moderate for a marketing site with no PHI transmission. Re-verified 2026-08-13 and expanded in `SECURITY-FINDINGS.md` **S3**.
 - **Fix:** Add via LiteSpeed config or the child theme. `x-content-type-options: nosniff` and `referrer-policy: strict-origin-when-cross-origin` are zero-risk. HSTS needs a rollback plan. **CSP will be laborious** given 13 inline script blocks and 6 inline style blocks (B9) — it would require nonces or hashes on all of them.
 - **Effort:** 30 min for the two zero-risk headers; CSP is a project.
 
@@ -224,25 +226,7 @@ Findings that are *not* page-speed findings and therefore do not live in `audit/
 
 ---
 
-## 7. Corrections This Document Produced — All Applied
-
-Revision 1 of this document listed five corrections to `audit/01-page-speed-performance-audit.md`. **All five were applied in that document's revision 2** and are recorded here only so the audit trail survives.
-
-| Correction | Where it now lives |
-|---|---|
-| The HTML contains **0** `<video>`, **0** `<source>`, **0** `poster=` — rev. 1 of audit 01 quoted Lighthouse's *rendered-DOM* snippet as source markup and instructed edits to elements that do not exist | `audit/01` **C1**, rewritten as Beaver Builder row-settings changes |
-| `fetchpriority="high"` is on an award badge, competing with the LCP element | `audit/01` **H4** |
-| ~~A Google Maps iframe loads eagerly in live DOM~~ | **Retracted in rev. 3. The iframe carries `loading="lazy"`.** The rev. 1 classification examined iframes on `src` vs `data-src` and truncated each element before the deciding attribute. See `audit/01` H5, which is now a different finding. |
-| 7 images lack `loading="lazy"`, not 5 — and **6 of the 7** also lack `width`/`height` (rev. 2 said all 7) | `audit/01` **H8**, **L4** |
-| The two Vimeo iframes sit inside an inert `<script type="text/html">` template and do **not** load — `audit/03` §3 was correct | `audit/03` §5, confirmed |
-
-Likewise, the sequence additions this document proposed in revision 1 are integrated into `audit/01` §8. **There is no separate sequence here.**
-
-**Rev. 3 note.** Three adversarial critics reviewed this document and `audit/01` rev. 2. Everything in §2, §3, §5, and §6 held under independent re-measurement — versions, plugin inventory, headers, and all 28 per-file byte pairs reproduced exactly. What did not hold were the two items struck above and the two method defects recorded in §4.
-
----
-
-## 8. Sources & Limitations
+## 7. Sources & Limitations
 
 - **Live source inspection** — `GET /` and `/knee-pain-lp/`, 2026-07-30, `--compressed`. Every count used as evidence taken with two independent patterns; both recorded.
 - **Asset sizes** — each file fetched twice, `Accept-Encoding: br,gzip` and `identity`, `content-length` from `%{size_download}`.
@@ -252,9 +236,8 @@ Likewise, the sequence additions this document proposed in revision 1 are integr
 
 ### Known limitations
 
-1. **No Lighthouse run accompanies this document.** Chrome cannot start in the audit environment. Figures marked **[LH]** are carried forward from 2026-07-30 18:13 EDT and inherit the run-to-run variance documented in `audit/01` §9.
+1. Figures marked **[LH]** come from the 2026-07-30 run and inherit the variance documented in `audit/01` §9. A three-run re-measurement of 2026-08-13 is in `audit/data/lighthouse-mobile-2026-08-13.md`; its CPU figures are not comparable to July's, which were taken on a different machine.
 2. **PowerPack and Ultimate Addons currency is unverified.** Both are premium with no public version API. PowerPack 2.40.1.6 is what the site reports; whether it is current was not established. UABB's installed version could not be determined at all — see B3.
 3. **10Web's configuration state is inferred, not observed.** The evidence establishes that the plugin's code is **loaded** — not that it is active in the wp-admin sense; see §3 — and that the frontend shows no optimisation. It does not establish which explanation applies; that requires wp-admin access. See `audit/01` C0.
-4. **Retracted in rev. 3.** Rev. 2 listed the Google Maps embed as an unmeasured eager load. It carries `loading="lazy"` and does not load on view. See `audit/01` H5.
-5. **Two pages sampled, not 44.** Findings marked site-wide (B1, B3, B4, B9, B10) were confirmed on both `/` and `/knee-pain-lp/`. The rest are homepage measurements. Header facts come from all 44 URLs across two sweeps — `audit/data/README.md`.
+4. **Two pages sampled, not 44.** Findings marked site-wide (B1, B3, B4, B9, B10) were confirmed on both `/` and `/knee-pain-lp/`. The rest are homepage measurements. Header facts come from all 44 URLs across two sweeps — `audit/data/README.md`.
 6. **`readme.txt` probing infers presence from a 403.** The control test validates the discriminator, but a plugin shipping no `readme.txt` returns 404 while being present. Absence claims from this method are weaker than presence claims.

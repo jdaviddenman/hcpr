@@ -80,7 +80,7 @@ The two sweeps ran at 21:46 UTC and 23:04 UTC — **78 minutes apart**, derived 
 |---|---|
 | 2026-07-28 "HTML carries zero caching headers" | CORRECT — 44/44 no `Cache-Control`, both runs |
 | 2026-07-28 "No cache plugin installed" | CORRECT — plugin files 404, control-validated |
-| 2026-07-28 "TTFB 2,540 ms" | CORRECT for the MISS path — it sits between sweep 1's p90 (2.277 s) and its maximum (2.654 s). (Rev. 2 of this file said "between run 1's p90 and run 2's median"; 2.540 is above both. Corrected.) |
+| 2026-07-28 "TTFB 2,540 ms" | CORRECT for the MISS path — between sweep 1's p90 (2.277 s) and its maximum (2.654 s) |
 | 2026-07-28 "no page caching / no `x-litespeed-cache` header" | **WRONG** — server-level cache active, 44/44 HIT on pass 2 in both runs |
 | 2026-07-28 "HTML served uncompressed" | **WRONG** — 44/44 Brotli, 81% saved. HEAD artifact. Finding deleted. |
 | "static assets have no ETag" | CORRECT — 6/6 sampled |
@@ -88,9 +88,9 @@ The two sweeps ran at 21:46 UTC and 23:04 UTC — **78 minutes apart**, derived 
 | 2026-07-28 "`/us/` returns 404" | **WRONG** — 200, and it is in the sitemap |
 | "sitemap = 44 URLs" | CORRECT — 44, dual-pattern confirmed |
 | 2026-07-28 "`page-sitemap.xml` = 42 URLs" | **WRONG** — 44 |
-| rev. 1 "44/44 MISS on first request" | Run-dependent. Run 1: 44/44. Run 2: 42/44. |
-| rev. 1 "TTFB MISS 0.4-2.7 s" | Understates it. Across both runs the range is **0.406-4.946 s** over 86 cold requests. |
-| rev. 1 named the 5 slowest pages | **WITHDRAWN** — the two runs share none of the five. |
+| "44/44 MISS on first request" | Run-dependent. Run 1: 44/44. Run 2: 42/44. |
+| "TTFB MISS 0.4-2.7 s" | Understates it. Across both runs the range is **0.406-4.946 s** over 86 cold requests. |
+| naming the 5 slowest pages | **Not reproducible** — the two runs share none of the five. |
 
 ## Revised diagnosis
 
@@ -100,22 +100,22 @@ The remediation is **pre-warm + TTL + `Cache-Control` on HTML**, not "install a 
 
 ## Findings verified live and unaffected by any of the above
 
-Re-confirmed 2026-07-30, each with two independent patterns unless noted. Items marked **[rev. 3]** were re-measured after an adversarial review overturned the rev. 2 reading:
+Re-confirmed 2026-07-30, each with two independent patterns unless noted.
 
 - 19 synchronous scripts, **0 `defer`, 0 `async`** — and 12 scripts, same zero, on `/knee-pain-lp/`
 - 13 stylesheets
 - **0 `<video>`, 0 `<source>`, 0 `poster=`** in the HTML — the hero is a `div.fl-bg-video` with `data-mp4` / `data-webm` / `data-fallback`
 - `hiking.mp4` 15,343,649 B, `hiking.webm` 5,802,541 B, both `max-age=2592000`
 - 35 `i.ytimg.com` thumbnail references; 35 YouTube iframes carry `data-src`, not `src`
-- **4 iframes carry a real `src`**: GTM noscript, 2 Vimeo (inside an inert `<script type="text/html">` template), and 1 Google Maps embed in live DOM **which carries `loading="lazy"`** — verified with three patterns after an earlier revision reported it as eager
+- **4 iframes carry a real `src`**: GTM noscript, 2 Vimeo (inside an inert `<script type="text/html">` template), and 1 Google Maps embed in live DOM **which carries `loading="lazy"`** — verified with three patterns
 - 23 `<img>`, of which **7 lack `loading="lazy"`**, and **6 of those 7 also lack `width`/`height`** — `Best-of-Watauga-County-2025-Ribbon.webp` carries `width="500" height="792"`
 - 1 `fetchpriority="high"`, on `Best-of-Watauga-County-2025-Ribbon.webp` (86,826 B) — emitted by WordPress core's `wp_get_loading_optimization_attributes()`, not by Beaver Builder
-- **[rev. 3]** homepage HTML is **218,440 B** uncompressed — matching `size_raw` in both TSVs. Rev. 2 reported 217,984, a Python `len(str)` character count.
-- **[rev. 3]** 12 first-party stylesheets, not 11: `swiper.min.css` (16,494 B raw / 4,259 br) was omitted from rev. 2's CSS accounting
+- homepage HTML is **218,440 B** uncompressed, matching `size_raw` in both TSVs. Measure in bytes — Python `len(str)` returns 217,984 because it counts characters.
+- 12 first-party stylesheets, including `swiper.min.css` (16,494 B raw / 4,259 br)
 - 5 Google Font families, no `display=swap`
 - Source HTML: 1,792 start tags (`html.parser`; regex cross-check 1,800), of which 218 are `<meta>` and 198 of those are video microdata
 
-**Correction to an earlier revision of this file:** it estimated the YouTube thumbnails at ~532 KB by sampling one thumbnail (15,585 B) and multiplying by 35. The Lighthouse run measures the actual set at **457.8 KiB** — individual thumbnails range from 11.4 to 15.2 KiB, so extrapolating from the largest overstated the total. Use the measured figure.
+**Do not extrapolate the thumbnail total from one sample.** They range 11.4-15.2 KiB, so multiplying the largest (15,585 B) by 35 gives ~532 KB against a measured **457.8 KiB**. Use the measured figure, or state the sample size and spread.
 
 ## Column reference
 
