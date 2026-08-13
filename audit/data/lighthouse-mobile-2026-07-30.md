@@ -122,7 +122,7 @@ Note: `hiking.mp4` transferred **3,112 KiB**, not the full file. `curl` reports 
 | `chat_embed.js` | 7.4 KiB | 150 ms |
 | **fonts.googleapis.com** (1) | 1.2 KiB | 790 ms |
 
-The page has 19 scripts and 13 stylesheets in total (verified by source inspection), but Lighthouse flags only these 11 as render-blocking. The separate audit "Avoid chaining critical requests" reports **33 chains** — that is the origin of the "33 render-blocking resources" figure in the superseded audit.
+The page has 19 scripts and 13 stylesheets in total (verified by source inspection); Lighthouse flags 11 as render-blocking. The separate "Avoid chaining critical requests" audit reports **33 chains** — a different number for a different thing, and easily confused with a render-blocking count.
 
 ## Text compression — 37 KiB estimated savings
 
@@ -130,7 +130,7 @@ The page has 19 scripts and 13 stylesheets in total (verified by source inspecti
 |---|---|---|
 | `rw-embed-data.s3.amazonaws.com/6809-a7ea-455a-196e-77a8.js` | 55.3 KiB | 36.6 KiB |
 
-**One resource, third-party.** The site's own HTML is absent from this audit because it is already Brotli-compressed (confirmed independently: 44/44 sitemap URLs serve `content-encoding: br`, 81% saved). The superseded C2 finding was a HEAD-request artifact.
+**One resource, third-party.** The site's own HTML is absent because it is already Brotli-compressed — 44/44 sitemap URLs serve `content-encoding: br`, 81% saved. (A HEAD request hides this: the server omits `content-encoding` from HEAD responses.)
 
 ## Cumulative Layout Shift — 0.184
 
@@ -154,7 +154,7 @@ The entire CLS score comes from shift #1. The hero video has no explicit dimensi
 
 1st-party offscreen images: `Chronic-Pain-Boone-NC-Knee-Pain-Red.webp` 53.6 KiB, `…Woman-With-Shoulder-Pain.webp` 50.8 KiB, `…Back-Pain.webp` 43.5 KiB, `…Neuropathy.webp` 40.8 KiB, `Chiropractic-Boone-NC-ASMST-Logo.webp` 13.7 KiB.
 
-This resolves the 758 vs 455 discrepancy in the superseded audit: 758 KiB is the total across all offscreen images; the YouTube thumbnails are 457.8 KiB of it.
+758 KiB is the total across all offscreen images; the YouTube thumbnails are 457.8 KiB of it.
 
 ## DOM
 
@@ -179,4 +179,4 @@ This resolves the 758 vs 455 discrepancy in the superseded audit: 758 KiB is the
 | Ensure text remains visible during webfont load | fails |
 | Passed audits | 19 |
 
-"Reduce unused CSS" and "Minify JS" did **not** appear in this run. Both were cited in the superseded audit (50 KB and 2 KB respectively).
+"Reduce unused CSS" and "Minify JS" did **not** appear in this run.
