@@ -19,7 +19,7 @@ argument for fixing them is cost and timing, not danger** — see "Why this is w
 
 | # | Finding | Severity | Cost to fix | Status |
 |---|---|---|---|---|
-| S1 | UserWay exposes an unauthenticated debug endpoint | **Low–Medium** | **One plugin update** | Open |
+| S1 | UserWay exposes an unauthenticated debug endpoint | **Low–Medium** | One filter — **no vendor fix exists** | Open |
 | S2 | REST API allows user enumeration | **Low** | One filter | Open |
 | S3 | No HTTP security headers | **Low–Medium** | 20 min | Open |
 | S4 | Liquid Web Harbor still loaded on AWS | **Low** | 30 min | Open |
@@ -43,49 +43,73 @@ argument for fixing them is cost and timing, not danger** — see "Why this is w
 Exact PHP version, exact WordPress version, exact plugin version, the **database table prefix** (`wp_`,
 from `wp_userway`), the account ID and setup date.
 
-### The fix is a plugin update, not custom code
+### The vendor has not fixed this, and updating will not help
 
-**UserWay removed the REST endpoints in version 2.5.1.** Verified against the official repository
-(`UserWayOrg/wordpress-accessibility-plugin`) on 2026-08-13 — all five PHP files, `userway.php` and
-`includes/{admin,controller,functions,notifications}.php`:
+**The current release still contains it.** WordPress.org ships **2.6.6** (2025-12-08). Downloaded and
+inspected 2026-08-13 — `includes/controller.php`, lines 47-53, byte-identical to the 2.4.8 the site runs:
 
+```php
+register_rest_route($this->namespace, '/save', [
+    'methods' => WP_REST_Server::CREATABLE,
+    'callback' => [$this, 'save'],
+    'permission_callback' => [$this, 'permissions_check'],
+]);
+
+register_rest_route($this->namespace, '/debug', [
+    'methods' => WP_REST_Server::READABLE,
+    'callback' => [$this, 'debug'],
+    'permission_callback' => function () {
+        return true;
+    },
+]);
 ```
-register_rest_route  occurrences:  0
-"debug"              occurrences:  0
+
+**`permission_callback` returns `true` unconditionally.** Two routes, registered eight lines apart: `/save`
+gets a real capability check, `/debug` gets a hardcoded `true`. This is not a framework default — it is an
+explicit declaration, and it is the exact pattern WordPress's REST API handbook warns against.
+
+> **Do not trust the GitHub repository for this plugin.** `UserWayOrg/wordpress-accessibility-plugin` was
+> last pushed 2024-06-19, its master is 2.5.1, and that tree contains **no REST routes at all** — which
+> makes it look as though the endpoint was removed. It was not. The GitHub tree has diverged from what
+> WordPress.org distributes. Verify against the distributed `.zip`, not the repo.
+
+### So the child-theme filter is the fix
+
+There is no version to update to. Block the route:
+
+```php
+add_filter( 'rest_authentication_errors', function ( $result ) {
+    if ( ! empty( $result ) ) { return $result; }
+    $route = $GLOBALS['wp']->query_vars['rest_route'] ?? '';
+    if ( str_starts_with( ltrim( $route, '/' ), 'userway/v1/debug' ) && ! current_user_can( 'manage_options' ) ) {
+        return new WP_Error( 'rest_forbidden', 'Forbidden', array( 'status' => 401 ) );
+    }
+    return $result;
+} );
 ```
 
-The only frontend hook in 2.5.1 is `add_action( 'wp_footer', 'usw_addplugin_footer_notice' )` at line 81
-of `userway.php`. **The site runs 2.4.8.** So this is not a design decision to argue about or a plugin to
-write a workaround for — it is an artefact of a version the vendor has already superseded.
+Or block the path at the server or WAF. Updating the plugin is still worth doing for other reasons — the
+site is on 2.4.8 against a current 2.6.6 — but **it will not close this endpoint**, and a verification that
+assumes it did will fail.
 
-1. **Update the plugin to 2.5.1.** That is the whole fix. No code, no regression surface.
-2. Regression-test the toolbar afterwards, since 2.5.1 also changes how settings are stored.
-3. Only if the update is blocked for some reason, block the route in the child theme:
-   ```php
-   add_filter( 'rest_authentication_errors', function ( $result ) {
-       if ( ! empty( $result ) ) { return $result; }
-       $route = $GLOBALS['wp']->query_vars['rest_route'] ?? '';
-       if ( str_starts_with( ltrim( $route, '/' ), 'userway/v1/debug' ) && ! current_user_can( 'manage_options' ) ) {
-           return new WP_Error( 'rest_forbidden', 'Forbidden', array( 'status' => 401 ) );
-       }
-       return $result;
-   } );
-   ```
+**Verify:** `curl -o /dev/null -w '%{http_code}\n' https://www.highcountrypainrelief.com/wp-json/userway/v1/debug`
+returns 401 or 403, not 200. Check this *after* the filter, not after the update.
 
-**Verify:** the endpoint returns 404 (after update) or 401/403 (after the filter), not 200.
+### Nobody has reported this, and it is unfixed in the current release
 
-### This is not a known CVE, and that cuts both ways
+WPScan records **zero** vulnerabilities for this plugin across **80,000 active installs**, and the endpoint
+is present in the release shipping today. That combination makes coordinated disclosure the highest-value
+action available here: it is unreported, unfixed, and affects every install of the current version.
 
-WPScan records **zero** vulnerabilities for this plugin across **80,000 active installs**. So it cannot be
-cited as known-exploited — but it also means nobody has reported it, and every site still on 2.4.8 has it.
-**Report it to UserWay and request a tracking ID.** A vendor acknowledgement is the most credible thing to
-put in front of a client, and at that install base it is a real contribution.
+**Report it to UserWay** with the code above and request a tracking ID. The class of finding is already
+accepted — accessiBe, a competing accessibility overlay, took **CVE-2025-10375** and **CVE-2025-13113**
+for exposing configuration data including account IDs to unauthenticated users on public pages.
 
-The class of finding is already accepted as a vulnerability. accessiBe — a competing accessibility overlay
-— took **CVE-2025-10375** and **CVE-2025-13113** for exposing configuration data, including account IDs
-and licence information, to unauthenticated users on public pages. Same shape.
+The repository's own issue **#2, "Fix debug endpoint declaration"** (opened 2021-10-17, closed four days
+later) is where this form of the route was introduced. There is no GitHub issue, pull request or advisory
+raising it as a security concern, then or since.
 
-Fold the update into Ticket 2 of `PRIORITY-FIXES.md`, which already touches this plugin.
+Fold the filter into Ticket 2 of `PRIORITY-FIXES.md`, which already touches this plugin.
 
 ---
 
@@ -188,8 +212,8 @@ Two reasons not to assume it is fine:
 - **The core software is current; its bundled libraries are years old** — Bootstrap 3.4.1 (EOL July 2019),
   fancyBox 3.5.7, Font Awesome 5.15.4, Animate.css 3.5.1, Swiper 8.4.7, plus two abandoned libraries. No
   plugin update reaches any of it (`audit/05` §2).
-- **UserWay 2.4.8 is behind, and that is the component already leaking.** If one plugin is two versions
-  stale, the others are worth checking.
+- **UserWay 2.4.8 is behind a current 2.6.6.** Updating will not close S1, but a plugin left four minor
+  versions stale suggests the others are worth checking.
 
 ---
 
@@ -257,7 +281,7 @@ credential-stuffing and pingback-amplification target, so this one mattered.
 
 ## Order
 
-1. **S1 — update the UserWay plugin.** One click, and it is the finding with a vendor fix already shipped.
+1. **S1 — add the child-theme filter, and report the endpoint to UserWay.** There is no version that fixes it.
 2. **S2** — one filter, or a Solid Security toggle. 10 min.
 3. **S3, the safe four headers** — no CSP, no HSTS yet. 20 min.
 4. **S4** — confirm and remove, plus a sweep for other leftovers. 30 min.
