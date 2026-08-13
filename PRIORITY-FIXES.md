@@ -532,14 +532,17 @@ practice sends it from the email on the ReviewWave account, copying Inception:
 > caching, which makes our pages slower. Could you enable gzip or Brotli compression and a
 > `Cache-Control` header on that file? Our developers estimate it would cut it from 57 KB to about 19 KB."
 
-### Two security items, ten minutes
+### Two security items — one of them is a plugin update
 
 Both are in `SECURITY-FINDINGS.md` with fixes and verification. Listed here because this ticket already
-has the same plugin and file open:
+has the same plugin open:
 
-- **S1** — `/wp-json/userway/v1/debug` is publicly readable and returns the PHP version, WordPress
-  version, plugin version, account ID and **database table prefix**
-- **S2** — `/wp-json/wp/v2/users` returns two valid usernames unauthenticated
+- **S1 — update UserWay to 2.5.1 while you are in there.** The site runs **2.4.8**, which exposes
+  `/wp-json/userway/v1/debug` to anyone: PHP version, WordPress version, plugin version, account ID and the
+  **database table prefix**. Verified against the official repository — **2.5.1 registers no REST routes at
+  all**, so the update is the entire fix. Regression-test the toolbar afterwards.
+- **S2** — `/wp-json/wp/v2/users` returns two valid usernames unauthenticated. One filter, or a Solid
+  Security toggle.
 
 ---
 
