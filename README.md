@@ -6,7 +6,7 @@ Page speed performance audit, architecture review, and remediation roadmap for [
 
 | # | Document | Scope |
 |---|----------|-------|
-| — | **[Priority Fixes](PRIORITY-FIXES.md)** | **The deliverable.** Plain-English summary for the practice and Inception, plus three self-contained work tickets. Re-measured live 2026-08-13; survived six adversarial passes. **Send this one.** |
+| — | **[Priority Fixes](PRIORITY-FIXES.md)** | **The deliverable.** Plain-English summary for the practice and Inception, plus three self-contained work tickets. Measured live 2026-08-13. **Send this one.** |
 | — | [Verifying Backend Claims](VERIFYING-BACKEND-CLAIMS.md) | How to confirm from outside that an asserted fix is live and reaching visitors. Four traps on this server that make a correct fix look failed — and an unshipped one look successful. Runnable census: [`audit/data/verify-live.sh`](audit/data/verify-live.sh). |
 | — | [Security Findings](SECURITY-FINDINGS.md) | Separate register. Five items surfaced passively while measuring: an unauthenticated debug endpoint, REST user enumeration, no security headers, a migration leftover, and one unassessed gap. |
 | 1 | [Page Speed Performance Audit](audit/01-page-speed-performance-audit.md) | Lighthouse 21/100 mobile. LCP breakdown, main-thread analysis, 24 findings, 24-step implementation sequence. **Start here.** |
@@ -37,10 +37,10 @@ median of 3). July figures shown for comparison — see the caveat below the tab
 
 > **The CPU rows are not comparable across the two months, and the site is not why.** Lighthouse
 > calibrates the simulated *network* but applies a fixed ×4 CPU multiplier to whatever machine runs it.
-> August ran at `benchmarkIndex` ≈ 1,300; July's index was not recorded. **Quote CPU figures with the
-> host attached, or not at all.** What reproduced exactly across both: the LCP element and its selector,
-> CLS coming from that one element, 105 max child elements, DOM depth 28, the render-blocking leader
-> (ReviewWave's S3 config), and the third-party cost ranking (UserWay 1st, GTM 2nd, ReviewWave 3rd).
+> August ran at `benchmarkIndex` ≈ 1,300; July's was not recorded. Quote CPU figures with the host
+> attached, or not at all. What reproduced exactly: the LCP element and its selector, CLS from that one
+> element, 105 max child elements, DOM depth 28, the render-blocking leader (ReviewWave's S3 config), and
+> the third-party ranking (UserWay 1st, GTM 2nd, ReviewWave 3rd).
 
 ## The Short Version
 
