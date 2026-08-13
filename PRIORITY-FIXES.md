@@ -537,10 +537,11 @@ practice sends it from the email on the ReviewWave account, copying Inception:
 Both are in `SECURITY-FINDINGS.md` with fixes and verification. Listed here because this ticket already
 has the same plugin open:
 
-- **S1 — update UserWay to 2.5.1 while you are in there.** The site runs **2.4.8**, which exposes
-  `/wp-json/userway/v1/debug` to anyone: PHP version, WordPress version, plugin version, account ID and the
-  **database table prefix**. Verified against the official repository — **2.5.1 registers no REST routes at
-  all**, so the update is the entire fix. Regression-test the toolbar afterwards.
+- **S1 — block `/wp-json/userway/v1/debug` with a child-theme filter.** It returns the PHP version,
+  WordPress version, plugin version, account ID and the **database table prefix** to anyone.
+  **Updating the plugin will not fix it**: the current release 2.6.6 registers the route with
+  `'permission_callback' => function () { return true; }`, byte-identical to the 2.4.8 the site runs.
+  Filter and verification in `SECURITY-FINDINGS.md` S1.
 - **S2** — `/wp-json/wp/v2/users` returns two valid usernames unauthenticated. One filter, or a Solid
   Security toggle.
 
