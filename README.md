@@ -15,7 +15,7 @@ Page speed audit, architecture review and remediation plan for
 | 3 | [Page Load & Caching Deep-Dive](audit/03-page-load-caching-deep-dive.md) | Cache policy by domain, cold-cache analysis, Beaver Builder cache behaviour. |
 | 4 | [On-Page SEO & Content Findings](audit/04-seo-content-findings.md) | Metadata gaps, schema format errors. |
 | 5 | [Architecture & Code Quality](audit/05-architecture-and-code-quality.md) | Plugin inventory, version currency, per-asset byte accounting. |
-| — | [Measured evidence](audit/data/) | Two Lighthouse runs, two 44-URL header sweeps, reproducer scripts. |
+| — | [Measured evidence](audit/data/) | Lighthouse mobile (Jul + Aug) and desktop (Aug), two 44-URL header sweeps, reproducer scripts. |
 
 ## Current State
 
