@@ -1,5 +1,10 @@
 # Measured Evidence
 
+> **Two Lighthouse runs exist.** `lighthouse-mobile-2026-07-30.md` (single run) and
+> `lighthouse-mobile-2026-08-13.md` (three runs, median). Their CPU figures are **not comparable** — see
+> the limits section of the August file. Header and byte facts below are from the July sweeps unless a
+> date says otherwise.
+
 | File | Contents |
 |---|---|
 | `lighthouse-mobile-2026-07-30.md` | full Lighthouse extract, both runs compared |
@@ -108,12 +113,12 @@ Re-confirmed 2026-07-30, each with two independent patterns unless noted.
 - `hiking.mp4` 15,343,649 B, `hiking.webm` 5,802,541 B, both `max-age=2592000`
 - 35 `i.ytimg.com` thumbnail references; 35 YouTube iframes carry `data-src`, not `src`
 - **4 iframes carry a real `src`**: GTM noscript, 2 Vimeo (inside an inert `<script type="text/html">` template), and 1 Google Maps embed in live DOM **which carries `loading="lazy"`** — verified with three patterns
-- 23 `<img>`, of which **7 lack `loading="lazy"`**, and **6 of those 7 also lack `width`/`height`** — `Best-of-Watauga-County-2025-Ribbon.webp` carries `width="500" height="792"`
+- 23 `<img>` on 2026-07-30 (**22** on 08-13), of which **7 lack `loading="lazy"`** (**6** on 08-13) and 6 of those also lack `width`/`height` — `Best-of-Watauga-County-2025-Ribbon.webp` carries `width="500" height="792"`. Re-derive the target list before scoping the work
 - 1 `fetchpriority="high"`, on `Best-of-Watauga-County-2025-Ribbon.webp` (86,826 B) — emitted by WordPress core's `wp_get_loading_optimization_attributes()`, not by Beaver Builder
-- homepage HTML is **218,440 B** uncompressed, matching `size_raw` in both TSVs. Measure in bytes — Python `len(str)` returns 217,984 because it counts characters.
+- homepage HTML is **218,440 B** uncompressed on 2026-07-30, matching `size_raw` in both TSVs, and **216,956 B** on 08-13. Measure in bytes — Python `len(str)` returns 217,984 because it counts characters.
 - 12 first-party stylesheets, including `swiper.min.css` (16,494 B raw / 4,259 br)
 - 5 Google Font families, no `display=swap`
-- Source HTML: 1,792 start tags (`html.parser`; regex cross-check 1,800), of which 218 are `<meta>` and 198 of those are video microdata
+- Source HTML: 1,792 start tags on 2026-07-30 (`html.parser`; regex cross-check 1,800), **1,774** on 08-13; 218 are `<meta>` and 198 of those are video microdata. Of the 33 `VideoObject` blocks, **31 are in the gallery and 2 are standalone modules**; four gallery slides carry no `itemscope`
 
 **Do not extrapolate the thumbnail total from one sample.** They range 11.4-15.2 KiB, so multiplying the largest (15,585 B) by 35 gives ~532 KB against a measured **457.8 KiB**. Use the measured figure, or state the sample size and spread.
 

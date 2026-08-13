@@ -1,6 +1,6 @@
 # Page Load, Caching & Third-Party Deep-Dive: highcountrypainrelief.com
 
-**Date:** 2026-07-31
+**Date:** 2026-07-31 · **figures reconciled to the 2026-08-13 re-measurement**
 **Scope:** caching layers, third-party behaviour, the YouTube facade. Metric findings and the remediation
 sequence live in `audit/01-page-speed-performance-audit.md`.
 **Evidence:** `audit/data/header-sweep-2026-07-30.tsv`, `…-run2.tsv`,
@@ -22,7 +22,7 @@ sequence live in `audit/01-page-speed-performance-audit.md`.
 | `googletagmanager.com` | GTM + gtag | short TTL by design | Lighthouse | **YES**, for size not caching. 275 KiB and 1,165 ms of blocking. The short TTL is correct; the container is the problem. Audit 01 H6. |
 | `cdn.userway.org` | Accessibility widget | `max-age=3600, public` | direct GET | Low. 137 KiB and 2,443 ms blocking are the issue, not the TTL. |
 | `cdn.reviewwave.com` | Reviews + chat | S3 + CloudFront | — | Low. 16 KiB, 196 ms blocking. |
-| `rw-embed-data.s3.amazonaws.com` | ReviewWave config JS | **none** | direct GET, 2026-07-30 | **YES, twice over.** `Content-Length: 56,589` and **no `Content-Encoding`** — the same bytes are returned whether or not `gzip` is requested. It is the only entry in Lighthouse's text-compression audit (36.6 KiB available) and the largest render-blocking resource at 1,570 ms. **No `Cache-Control`**, so browsers do not cache it between visits; `ETag` and `Last-Modified` are present, so revalidation costs a round trip every time. The object metadata belongs to ReviewWave. The fix available here is `defer`. |
+| `rw-embed-data.s3.amazonaws.com` | ReviewWave config JS | **none** | direct GET, 2026-07-30 and 08-13 | **YES, twice over.** `Content-Length: 56,589` on 07-30 and **57,267 B** on 08-13 — a live data file and **no `Content-Encoding`** — the same bytes are returned whether or not `gzip` is requested. It is the only entry in Lighthouse's text-compression audit (36.6 KiB available) and the largest render-blocking resource at 1,570 ms. **No `Cache-Control`**, so browsers do not cache it between visits; `ETag` and `Last-Modified` are present, so revalidation costs a round trip every time. The object metadata belongs to ReviewWave; `gzip -9` would take it to 19,115 B. The fix available here is `defer`; the compression ask has to come from the practice as account holder. **ReviewWave is six resources, not three** — the two embed scripts each inject a stylesheet at runtime and `chat_embed.js` fetches a second S3 config, totalling 73,995 B transfer / 120,119 B uncompressed, none carrying `Cache-Control`. |
 | `fonts.gstatic.com` | Font files | `max-age=31536000` | direct GET | No. 1 year, immutable, versioned URLs. |
 | `fonts.googleapis.com` | Font CSS | `private, max-age=86400` | direct GET | Minor. `private` is correct — the CSS varies by user agent. The issue is 5 families and no `display=swap`. |
 | `i.vimeocdn.com` | Vimeo thumbnail | `max-age=2592000` | direct GET | No. 30 days, 15 KiB, one embed. |
@@ -112,8 +112,9 @@ groups rather than keying on the full string. No action.
   apply to CSS backgrounds
 - **457.8 KiB** total, 11.4–15.2 KiB each, all eager
 - `i.ytimg.com` serves `cache-control: public, max-age=7200`
-- The gallery container `div.pp-video-gallery-items.swiper-wrapper` holds **105 child elements** — the
-  densest structure on the page and a direct contributor to the 3,197-element DOM
+- The gallery container `div.pp-video-gallery-items.swiper-wrapper` holds **105 child elements** on both
+  measurement dates — the densest structure on the page, and a direct contributor to the 3,181-element DOM.
+  **70 of the 105 are Swiper loop clones and are removable by unticking Loop** — see `audit/01` H8(0)
 
 **The iframes are already lightbox-deferred and cost 0 KiB until click.** The measured saving from a
 facade is **457.8 KiB and 35 requests**, not the iframe payload.
@@ -174,9 +175,13 @@ never contacted:
 - Cache-busting via content-hash query strings (`?ver=bcd079b…`)
 - Regenerates on page save, plugin update, site URL change, or `WP_DEBUG = true`
 
-**What it costs.** `2-layout.js` is the most expensive script on the page: **10,883 ms CPU, 10,081 ms of
-it evaluation.** `2-layout.css` is 20.3 KiB and render-blocking at 450 ms. This is the price of the page's
-module count, and it shrinks only when the page carries fewer modules.
+**What it costs.** `2-layout.js` is the most expensive script on the page on both measurement dates —
+10,883 ms CPU in July, 2,371 ms in August, the difference being the test machine rather than the site.
+Most of it is evaluation, i.e. DOM construction. This is the price of the page's module count, and it
+shrinks only when the page carries fewer modules.
+
+The 2.10.3.1 upgrade regenerated both bundles on 2026-08-11 and both shrank: `2-layout.js` 87,756 →
+72,591 B raw, `2-layout.css` 185,968 → 164,124 B raw.
 
 **What it does not do:** page caching, HTML caching, browser cache headers, object caching, minification
 beyond its own files, or CDN integration.
@@ -228,8 +233,9 @@ a time, verifying the BB editor and the video gallery after each.
 | Vimeo thumbnail | i.vimeocdn.com | eager | 0 ms | 15 KiB | — |
 | hero video | chiro.inceptionimages.com | CSS bg video | 0 ms | 3,112 KiB | — |
 
-**Third-party main-thread blocking: 3,820 ms.** UserWay 2,443 ms (64%), GTM 1,165 ms (30%), ReviewWave
-196 ms (5%), S3 14 ms.
+**Third-party main-thread blocking: 3,820 ms in July, ~810-880 ms in August** — a test-machine difference,
+not a site change. UserWay 2,443 → 481-495 ms, GTM 1,165 → 297-351 ms, ReviewWave 196 → 33 ms. **The
+ordering is identical on both dates**, and it is the ordering that decides what to fix first.
 
 **Iframe census: 39 iframes.** 35 carry `data-src` (deferred). 4 carry a real `src` — the GTM noscript
 pixel, two `player.vimeo.com` iframes inside an inert `<script type="text/html" class="pp-video-lightbox-content">`
