@@ -41,6 +41,10 @@ curl -s 'https://www.highcountrypainrelief.com/wp-content/uploads/bb-plugin/cach
 
 In Chrome DevTools, a page load should show **no request to `hiking.mp4` or `hiking.webm`**, and the gallery's slide count drops from 105 to 35.
 
+## What a visitor notices — fix 2
+
+The video-testimonials section **stops sliding on its own** and waits for the visitor. All 35 videos stay — reachable by the arrows, dots, or a swipe — and clicking one still plays it in the same pop-up; video playback doesn't change, and layout and styling are identical. The one trade-off: the auto-rotation used to hint "there's more here"; the arrows and dots still do, just without the motion. (The 105 → 35 element drop is invisible — those were off-screen duplicate slides the software built to fake the loop.)
+
 ## What this does not do
 
 These two clear the biggest wins that carry no risk. They will not reach a green score on their own — that needs the deeper work (third-party scripts, render-blocking) on a staging site with a capable developer. Full detail and the rest of the plan: `PRIORITY-FIXES.md`.
