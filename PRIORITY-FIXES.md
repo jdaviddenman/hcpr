@@ -689,4 +689,4 @@ cited by Google's own teaching page); and any projected score, ranking, revenue 
   critical CSS and no CDN. That proves the code loads and nothing more. A 30-minute check, worth doing
   before hand-writing work the plugin may already be configured to do.
 
-Full findings and the 24-step sequence: `audit/01-page-speed-performance-audit.md`.
+Full findings and the 26-step sequence: `audit/01-page-speed-performance-audit.md`, reconciled to these measurements.

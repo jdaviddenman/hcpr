@@ -1,6 +1,6 @@
 # Architecture, Version Currency & Code Quality: highcountrypainrelief.com
 
-**Date:** 2026-07-31
+**Date:** 2026-07-31 · **versions and byte tables reconciled to 2026-08-13**
 **Scope:** platform architecture, plugin inventory, version currency, per-asset byte accounting, and code-quality indicators. Metric findings and the remediation sequence live in `audit/01-page-speed-performance-audit.md`; caching and third-party behaviour live in `audit/03-page-load-caching-deep-dive.md`. **This document does not restate their findings** — where a measurement here became a finding there, the finding ID is cited.
 
 **Evidence:** live GET of `/` and `/knee-pain-lp/`, `GET /wp-json/`, per-asset `content-length` under two encodings, `api.wordpress.org` version APIs. All 2026-07-30.
@@ -11,13 +11,13 @@
 
 ## 1. Executive Summary
 
-**WordPress core and the plugins are current.** `7.0.2` is what `api.wordpress.org` reports as `current`. Yoast 28.1 is the latest release. Beaver Builder 2.10.3 sits ahead of the public lite build. The premise that this site runs stale software does not survive measurement.
+**WordPress core and the plugins are current.** `7.0.4` as at 2026-08-13 (`7.0.2` on 07-30) is what `api.wordpress.org` reports as `current`. Yoast 28.1 is the latest release. Beaver Builder 2.10.3 sits ahead of the public lite build. The premise that this site runs stale software does not survive measurement.
 
 **What is stale is vendored inside those current plugins.** Bootstrap 3.4.1 (EOL July 2019), Font Awesome 5.15.4, Swiper 8.4.7, fancyBox 3.5.7, Animate.css 3.5.1, jquery.fitvids 1.2. None can be reached by a plugin update. §2.
 
 **Ten plugins are loaded, and one of them is a page-speed optimiser producing no measurable effect.** No prior document in this repository contained a plugin inventory. §3. That finding is `audit/01` **C0** and is step 3 of the remediation sequence.
 
-**Brotli hides a 5.5× gap between what is transferred and what is parsed.** 283,722 B on the wire, 1,550,595 B through the parser. Per-asset accounting in §4. The framing consequence is `audit/01` **H1**. Raw bytes are still a poor CPU proxy here: Script Parse & Compile is only 383 ms of 36,900.
+**Brotli hides a ~5.4× gap between what is transferred and what is parsed.** ~278,042 B on the wire, ~1,512,102 B through the parser (283,722 / 1,550,595 B on 2026-07-30, before the three assets noted in §4 shrank). Per-asset accounting in §4. The framing consequence is `audit/01` **H1**. Raw bytes are still a poor CPU proxy here: Script Parse & Compile is only 383 ms of 36,900.
 
 **Ten code-quality indicators**, of which one is an operational trap: two assets carry a `?ver=` that never changes when the file does, so an edit to the child theme's CSS will not reach a returning visitor for 30 days. §6.
 
@@ -29,15 +29,15 @@
 
 | Component | Installed | Evidence | Latest | Verdict |
 |---|---|---|---|---|
-| WordPress | **7.0.2** | `<meta name="generator" content="WordPress 7.0.2" />`; `wp-emoji-release.min.js?ver=7.0.2` | **7.0.2** — `api.wordpress.org/core/version-check/1.7/` returns `"current":"7.0.2"` | current |
+| WordPress | **7.0.4** | `<meta name="generator" content="WordPress 7.0.4" />`; `wp-emoji-release.min.js?ver=7.0.4` | **7.0.4** — `api.wordpress.org/core/version-check/1.7/` returns `"current":"7.0.2"` | current |
 | Yoast SEO | 28.1 | `yoast/v1` REST namespace; version from audit 04 | 28.1, released 2026-07-21 | current |
 | Beaver Builder | 2.10.3 | `?ver=2.10.3` on 9 first-party assets | wp.org lite build is 2.10.2.2 (2026-06-08); premium tracks ahead | current |
 | Beaver Themer | 1.5.3.2 | `…-layout-bundle.css?ver=2.10.3-1.5.3.2` | — | not independently checkable |
 | BB Theme | 1.7.19.2 | `?ver=1.7.19.2` on 4 theme assets | — | not independently checkable |
 | PowerPack for BB | **2.40.1.6** | inline `var bb_powerpack = { version: '2.40.1.6' }` | — | premium, no public API — **unverified** |
-| Ultimate Addons for BB | **undetermined** | its only frontend asset carries `?ver=7.0.2` — the WP core fallback, not a plugin version | — | see B3 |
+| Ultimate Addons for BB | **undetermined** | its only frontend asset carries the WP core fallback `?ver=`, not a plugin version | — | see B3 |
 
-**On reading versions off `?ver=` strings.** On this site a `?ver=` reports one of three different things: the plugin version (`bb-plugin` assets), the *bundled library* version (`swiper.min.js?ver=8.4.7`, `jquery.fancybox.min.css?ver=3.5.4`), or the WordPress core version where a script was enqueued with no version argument (`js_cookie.js?ver=7.0.2`). This resolves the version confusion flagged in `audit/04-seo-content-findings.md` — "Ultimate Addons at 2.10.3, probably a copy-paste error." It was a misread of a `?ver=` string, and the plugin's actual version still cannot be determined from the frontend.
+**On reading versions off `?ver=` strings.** On this site a `?ver=` reports one of three different things: the plugin version (`bb-plugin` assets), the *bundled library* version (`swiper.min.js?ver=8.4.7`, `jquery.fancybox.min.css?ver=3.5.4`), or the WordPress core version where a script was enqueued with no version argument (`js_cookie.js?ver=7.0.4`, which read `7.0.2` before the core update — evidence that the string tracks core, not the file). This resolves the version confusion flagged in `audit/04-seo-content-findings.md` — "Ultimate Addons at 2.10.3, probably a copy-paste error." It was a misread of a `?ver=` string, and the plugin's actual version still cannot be determined from the frontend.
 
 ### Vendored libraries — stale, and unreachable by a plugin update
 
@@ -101,7 +101,7 @@ Every first-party asset fetched twice — `Accept-Encoding: br,gzip` and `Accept
 | File | Raw | Brotli | Ratio |
 |---|---:|---:|---:|
 | `swiper.min.js` | 143,660 | 38,121 | 3.8× |
-| `2-layout.js` (BB, per-page) | 87,756 | 18,583 | 4.7× |
+| `2-layout.js` (BB, per-page) | **72,591** | **15,884** | 4.6× |
 | `jquery.min.js` | 87,553 | 29,744 | 2.9× |
 | `…-layout-bundle.js` (Themer) | 86,001 | 11,285 | 7.6× |
 | `jquery.fancybox.min.js` | 68,253 | 20,999 | 3.3× |
@@ -124,12 +124,12 @@ The homepage carries 19 `<script src>` tags; the three not listed are third-part
 
 | File | Raw | Brotli | Ratio |
 |---|---:|---:|---:|
-| `2-layout.css` (BB, per-page) | 185,968 | 20,711 | 9.0× |
+| `2-layout.css` (BB, per-page) | **164,124** | **17,986** | 9.1× |
 | `…-layout-bundle.css` (Themer) | 183,112 | 15,073 | 12.1× |
 | `bootstrap.min.css` | 121,412 | 18,239 | 6.7× |
 | `all.min.css` (Font Awesome 5) | 59,305 | 12,370 | 4.8× |
 | `animate.min.css` | 52,789 | 3,733 | 14.1× |
-| `skin-6a6bcbee4c24e.css` | 50,813 | 7,261 | 7.0× |
+| `skin-*.css` (BB theme skin) | 50,813 | 7,261 | 7.0× |
 | `ultimate-icons/style.css` | 21,667 | 3,061 | 7.1× |
 | `jquery.fancybox.min.css` | 12,795 | 2,897 | 4.4× |
 | `jquery.magnificpopup.min.css` | 5,788 | 1,463 | 4.0× |
@@ -142,13 +142,15 @@ The homepage carries 19 `<script src>` tags; the three not listed are third-part
 
 | | Raw | Brotli |
 |---|---:|---:|
-| HTML | 218,440 | 33,546 |
+| HTML | **216,956** | **33,290** |
 | — of which inline `<style>` (6 blocks) | 29,946 | — |
 | — of which inline `<script>` (13 blocks) | 16,026 | — |
 
 **Compression ratios vary from 1.8× to 14.1×.** That is why transfer size does not predict CPU saving: `animate.min.css` costs 3,733 B on the wire and 52,789 B through the parser, while `jquery.min.js` costs 29,744 B on the wire and 87,553 B parsed. A remediation list ranked by transfer bytes puts these in the wrong order.
 
-**Grand total: 1,550,595 B parsed, 283,722 B transferred — a 5.5× gap.**
+**Grand total: ~1,512,102 B parsed, ~278,042 B transferred — a ~5.4× gap.**
+
+> **Three assets were re-measured on 2026-08-13 and all three shrank.** The HTML by 1,484 B raw, and Beaver Builder's two compiled bundles — regenerated 2026-08-11 by the 2.10.3.1 upgrade — by 15,165 B and 21,844 B raw. Their rows above carry the August figures; every other row is from 2026-07-30, so the totals are approximate. The BB theme skin file was also regenerated (`skin-6a6bcbee4c24e.css` → `skin-6a7c9951a3254.css`), which means the theme customiser settings were re-saved at some point between the two dates.
 
 > **Measure in bytes, not characters.** Python `len(str)` undercounts this document — it contains CRLF
 > pairs and multi-byte characters. The sweep TSVs independently record `size_raw=218440` for `/`.
@@ -197,12 +199,12 @@ Findings that are *not* page-speed findings and therefore do not live in `audit/
 
 **A4: The rendered DOM is 1.8× the source DOM**
 
-- **Evidence:** Lighthouse counts **3,197** elements [LH]. The delivered HTML contains **1,792** start tags (`html.parser`; regex cross-check 1,800). About **1,400 elements are created by JavaScript at runtime** — the hero `<video>` (`audit/01` C1), the ReviewWave chat widget, the UserWay widget, and Beaver Builder's own layout construction.
+- **Evidence:** Lighthouse counts **3,181** elements on 2026-08-13 and 3,197 on 07-30 [LH]. The delivered HTML contains **1,774** start tags (1,792 in July) (`html.parser`; regex cross-check 1,800). About **1,400 elements are created by JavaScript at runtime** — the hero `<video>` (`audit/01` C1), the ReviewWave chat widget, the UserWay widget, and Beaver Builder's own layout construction.
 
-  Composition of the 1,792 source elements: 760 `<div>`, **218 `<meta>`**, 130 `<span>`, 118 `<p>`, 102 `<a>`, 76 `<li>`, 42 `<svg>`, 39 `<iframe>` (of which 35 are `data-src`-deferred), 32 `<script>`.
+  Composition of the source elements, 2026-07-30: 760 `<div>`, **218 `<meta>`**, 130 `<span>`, 118 `<p>`, 102 `<a>`, 76 `<li>`, 42 `<svg>`, 39 `<iframe>` (of which 35 are `data-src`-deferred), 32 `<script>`.
 
   **198 of the 218 `<meta>` tags are microdata `itemprop` attributes** — 6 per video (`name`, `description`, `uploadDate`, `thumbnailUrl`, `contentUrl`, `embedUrl`) across 33 videos, emitted by PowerPack's video module.
-- **Impact:** Explains why `audit/01` M2's DOM finding cannot be assessed from the HTML alone, and why `2-layout.js` costs 10,883 ms [LH] — a large share of that bundle is DOM construction, not behaviour.
+- **Impact:** Explains why `audit/01` M2's DOM finding cannot be assessed from the HTML alone, and why `2-layout.js` cost 10,883 ms [LH] — a large share of that bundle is DOM construction, not behaviour.
 - **Tradeoff, not a defect:** the 198 microdata tags are valid `VideoObject` structured data that Google reads. They are ~11% of source elements. Do not remove them as a performance measure without an SEO decision — and note that the YouTube facade in `audit/01` H8 may remove them as a side effect. Flag that before it happens.
 
 ---
@@ -213,13 +215,13 @@ Findings that are *not* page-speed findings and therefore do not live in `audit/
 |---|---|---|---|
 | B1 | Zero `defer`, zero `async` | 0 of 19 scripts on `/`; 0 of 12 on `/knee-pain-lp/` | site-wide, not homepage-specific. `audit/01` H2. Five scripts sit in `<head>`: jQuery, jQuery Migrate, and all three ReviewWave scripts. |
 | B2 | jQuery Migrate in the render path | 13,577 B raw, synchronous, `<head>` | WordPress ships it, but its presence means deprecated jQuery APIs are still being called. It is the reason `audit/01` H2 recommends *against* deferring jQuery. `audit/01` L6. |
-| B3 | `?ver=` falls back to the WP core version | `bb-ultimate-addon/…/js_cookie.js?ver=7.0.2`; `bb-theme-child/style.css?ver=7.0.2` | Both enqueued with no version argument. With `max-age=2592000` on static assets, **a child-theme CSS edit stays stale for a returning visitor for 30 days.** Operational trap: the change ships and appears not to work. `audit/01` M6. |
+| B3 | `?ver=` falls back to the WP core version | `bb-ultimate-addon/…/js_cookie.js?ver=7.0.4`; `bb-theme-child/style.css?ver=7.0.4` | Both enqueued with no version argument. With `max-age=2592000` on static assets, **a child-theme CSS edit stays stale for a returning visitor for 30 days.** Operational trap: the change ships and appears not to work. `audit/01` M6. |
 | B4 | 138 occurrences of `!important` | in the delivered HTML alone | specificity conflicts between BB, PowerPack, the theme skin, and 7,759 B of `wp-custom-css` |
 | B5 | 47 inline `style="` attributes | — | uncacheable; they defeat the CSS cache the site otherwise has correctly configured |
 | B6 | 4,624 B of hand-written inline JS | `normalizeText()` / `getDuplicatePrefixLength()` | Walks the DOM on every page load to strip duplicated heading prefixes from grid titles. A content problem patched at runtime. Fixing the content removes the script. |
 | B7 | Animate.css 3.5.1 loaded in full | 52,789 B raw, 3,733 B wire — a 14.1× ratio | The worst transfer-vs-parse gap on the site. Relates to `audit/01` L5, "5 non-composited animations". |
 | B8 | Font Awesome loaded as full `all.min.css` | 59,305 B raw, plus 2 preloaded woff2 families | for an icon count in the low dozens; subsetting is the standard remedy. The preloads compete with the LCP element — `audit/01` H4. |
-| B9 | 29,946 B inline `<style>` + 16,026 B inline `<script>` | 21.0% of the 218,440 B document | re-sent on every page view, and HTML carries no `Cache-Control` (`audit/03` §1). Also the main obstacle to a CSP (A3). |
+| B9 | 29,946 B inline `<style>` + 16,026 B inline `<script>` | 21.0% of the document | re-sent on every page view, and HTML carries no `Cache-Control` (`audit/03` §1). Also the main obstacle to a CSP (A3). |
 | B10 | Static assets have no `ETag`; HTML has no `Cache-Control` | 6 static assets sampled; 88 HTML requests across two sweeps | confirms `audit/01` L1 and M1 |
 
 **Architecture is consistent across pages.** `/knee-pain-lp/` shows the same shape as `/`: 12 scripts with 0 `defer`/`async`, 11 stylesheets, 6 inline `<style>` blocks including `global-styles-inline-css`, emoji scripts present, 9 of 12 images eager. B1, B3, B4, B9, and B10 are site-wide.

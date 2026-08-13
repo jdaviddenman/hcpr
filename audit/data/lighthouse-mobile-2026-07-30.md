@@ -1,5 +1,9 @@
 # Lighthouse Mobile Run — 2026-07-30
 
+> **Superseded for metrics by `lighthouse-mobile-2026-08-13.md`** (three runs, median). This file remains
+> the July record. CPU figures on the two dates are not comparable — Lighthouse applies a fixed ×4
+> multiplier to whatever host runs it.
+
 **Captured:** Jul 30, 2026, 6:13 PM EDT | **Tool:** Lighthouse 12.6.0, Chromium 138.0.0.0
 **Conditions:** Emulated Moto G Power, Slow 4G throttling, single page session, initial page load
 **URL:** `https://www.highcountrypainrelief.com/`

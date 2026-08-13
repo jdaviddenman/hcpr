@@ -1,7 +1,7 @@
 # Page Speed Performance Audit: highcountrypainrelief.com
 
-**Date:** 2026-07-31
-**Platform:** WordPress 7.0.2 + Beaver Builder 2.10.3 + Beaver Themer 1.5.3.2 + BB Theme 1.7.19.2 + PowerPack for BB 2.40.1.6 + Ultimate Addons for BB
+**Date:** 2026-07-31 · **metrics reconciled to the 2026-08-13 re-measurement**
+**Platform:** WordPress **7.0.4** + Beaver Builder **2.10.3.1** + Beaver Themer 1.5.3.2 + BB Theme 1.7.19.2 + PowerPack for BB 2.40.1.6 + Ultimate Addons for BB (versions as at 2026-08-13; 7.0.2 / 2.10.3 on 2026-07-30)
 **Server:** LiteSpeed on AWS EC2 (`44.223.213.21`), HTTP/2, HTTP/3 advertised. No CDN. Server-level page cache active but cold on nearly every page. Static assets: Brotli + 30-day `max-age`, no ETag. HTML: Brotli, no `Cache-Control`.
 
 **Evidence**
@@ -26,61 +26,74 @@
 
 ## 1. Executive Summary
 
-The site scored **21/100 on mobile Lighthouse** on 2026-07-30; a run two days earlier of the same unchanged site scored 27. The problem is not the server, not compression, and not the absence of caching. It is one element, one main thread, and one plugin whose state nobody has checked.
+The site scores **33/100 on mobile Lighthouse** — the median of three runs on 2026-08-13, which scored 27, 33 and 34. Two runs on 2026-07-28 and 07-30 scored 27 and 21. The problem is not the server, not compression, and not the absence of caching. It is one element, one main thread, and one plugin whose state nobody has checked.
 
 **The four things that matter, in order:**
 
-1. **One Beaver Builder row setting removes 60.7% of mobile payload and swaps the LCP element for a 77 KB first-party image.** The hero row carries `data-video-mobile="yes"`. On a mobile user agent BB's else-branch sets `src=""` on the `<video>` instead of leaving the two `<source>` children active, so neither video file is fetched — and the fallback WebP that BB has already attached as a background paints instead. Setting **Show Video On Mobile = No** costs about five minutes and needs no design approval. It does **not** remove the `<video>` element — verify by the absent *request*, not the absent element. See **C1-A**.
-2. **CLS does not come from a missing row height. It comes from Beaver Builder sizing the video twice.** The row already has explicit padding at all three breakpoints. The served markup carries no `data-width`/`data-height`, so BB inserts the video at one size and re-sizes it on `loadedmetadata` — a shift gated on the video download. See **C1-B**.
+1. **One Beaver Builder row setting removes roughly 88% of mobile payload and swaps the LCP element for a 77 KB first-party image.** The hero row carries `data-video-mobile="yes"`. On a mobile user agent BB's else-branch sets `src=""` on the `<video>` instead of leaving the two `<source>` children active, so neither video file is fetched — and the fallback WebP that BB has already attached as a background paints instead. Setting **Show Video On Mobile = No** costs about five minutes and needs no design approval. It does **not** remove the `<video>` element — verify by the absent *request*, not the absent element. See **C1-A**.
+2. **CLS does not come from a missing row height. It comes from Beaver Builder sizing the video twice.** The row already has explicit padding at all three breakpoints. The served markup carries no `data-width`/`data-height`, so BB inserts the video at one size and re-sizes it on `loadedmetadata` — a shift gated on the video download. **It is intermittent: 0.184 on the cold-cache run of 2026-08-13, 0.000 on both warm runs.** Verify it cold. See **C1-B**.
 3. **A page-speed plugin is loaded and the frontend shows no sign of it.** 10Web Booster's REST routes are registered — `set_critical`, `page_cache`, `regenerate_webp` among them — on a page with zero `defer`, zero `async`, no critical CSS, and no CDN. There are at least three explanations and this audit cannot distinguish them from outside. Check it before hand-writing work it may already do. See **C0**.
-4. **Main-thread work totals 36.9 s [LH]**, of which 16.3 s is script evaluation. TBT is 14,710 ms against a 200 ms threshold. See **C2**.
+4. **Main-thread work is 10.6 s and TBT 1,684 ms** [LH Aug] — against 36.9 s and 14,710 ms in July, on a near-identical site. Those figures scale with the machine running the test, not the site. What holds is the ordering of what costs most. See **C2**.
 
 **Between 3 h 25 min and 4 h 25 min needs no design approval, no plugin installs, and no page rebuilds** — steps 1-8 of §8. The first two steps are 20 minutes of that and carry most of the value.
 
-**There is no configuration path to a green score.** The ceiling is 3,197 rendered DOM elements [LH], a 10,883 ms Beaver Builder layout bundle, four libraries doing two jobs, and 3,820 ms of third-party main-thread blocking.
+**There is no configuration path to a green score.** The ceiling is **3,181** rendered DOM elements [LH Aug], the Beaver Builder layout bundle (the largest first-party script cost in both months), four libraries doing two jobs, and third-party code the practice does not control.
 
 ---
 
 ## 2. Metrics
 
-All **[LH]**. Single runs; see §9.
+All **[LH]**. August is the median of three runs; July figures are single runs. See §9.
 
-| Metric | 2026-07-30 | 2026-07-28 | Threshold | Status |
-|--------|-----------|-----------|-----------|--------|
-| Performance Score | **21** | 27 | 90+ | FAIL |
-| LCP | **18.9 s** | 15.9 s | <2.5 s | 7.6× over |
-| TBT | **14,710 ms** | 18,520 ms | <200 ms | 74× over |
-| CLS | **0.184** | 0.184 | <0.1 | FAIL |
-| FCP | **3.0 s** | 3.0 s | <1.8 s | 1.7× over |
-| Speed Index | **14.1 s** | 17.2 s | <3.4 s | 4.1× over |
-| TTFB | **700 ms** | 2,550 ms | <800 ms | **PASS** |
-| Network payload | **5,123 KiB** | 16,558 KiB | — | 60.7% is one video |
-| Rendered DOM elements | **3,197** | — | <1,500 | 2.1× over |
+| Metric | **2026-08-13** (median of 3) | 2026-07-30 | 2026-07-28 | Threshold | Status |
+|--------|------|-----------|-----------|-----------|--------|
+| Performance Score | **33** | 21 | 27 | 90+ | FAIL |
+| LCP | **12.2 s** | 18.9 s | 15.9 s | <2.5 s | 4.9× over |
+| CLS | **0.000 warm / 0.184 cold** | 0.184 | 0.184 | <0.1 | FAIL on the cold path |
+| FCP | **3.9 s** | 3.0 s | 3.0 s | <1.8 s | 2.2× over |
+| Speed Index | **7.1 s** | 14.1 s | 17.2 s | <3.4 s | 2.1× over |
+| Network payload | **16,986 KiB** | 5,123 KiB | 16,558 KiB | — | **~88% is one video** |
+| Rendered DOM elements | **3,181** | 3,197 | — | <1,500 | 2.1× over |
+| TBT | **1,684 ms** | 14,710 ms | 18,520 ms | — | host-dependent, see below |
+| Main-thread work | **10.6 s** | 36.9 s | — | — | host-dependent |
+| Server response | **6 ms warm / 2,037 ms cold** | 700 ms | 2,550 ms | <800 ms | passes warm |
+
+> **TBT and main-thread totals are not comparable between the two dates, and the site is not the reason.**
+> Lighthouse calibrates the simulated *network* but applies a fixed ×4 CPU multiplier to whatever host
+> runs it. August ran at `benchmarkIndex` ≈ 1,300; July's index was not recorded. Quote either figure with
+> its host attached, or not at all. **TBT is also not a Core Web Vital** — Google publishes no threshold
+> for it; it is a lab proxy for INP, which needs real visitors to measure.
+
+> **Payload varies enormously by run** because the browser aborts the hero video download at a different
+> point each time: 3,112 KiB in July, the entire ~15 MB file in all three August runs. No single payload
+> figure from this page is reliable. The video's dominance is the stable finding.
 
 Measured directly, not from Lighthouse:
 
 | Measure | Value | Method |
 |---|---|---|
-| TTFB, cold cache | **0.406-4.946 s** | 86 cold requests across two sweeps, M1 |
-| TTFB, warm cache | **0.052-0.113 s** | 90 warm requests across two sweeps |
-| First-party bytes parsed | **1,550,595 B** (1,514 KiB) | `Accept-Encoding: identity` per asset |
-| First-party bytes transferred | **283,722 B** (277 KiB) | `Accept-Encoding: br,gzip` per asset |
-| Source-HTML elements | 1,792 | `html.parser` start tags |
+| TTFB, cold cache | **0.406-4.946 s** (Jul, n=86); **0.592-2.225 s**, median 1.054 s (Aug, n=12) | first requests across three sweeps, M1 |
+| TTFB, warm cache | **0.052-0.113 s** (Jul); **0.068-0.103 s** (Aug) | 90 + 12 warm requests |
+| First-party bytes parsed | **~1,512,102 B** (1,477 KiB) | `identity` per asset; July's 1,550,595 B less the three assets re-measured in August |
+| First-party bytes transferred | **~278,042 B** (272 KiB) | `br,gzip` per asset; July's 283,722 B on the same basis |
+| Source-HTML elements | **1,774** (1,792 on 07-30) | `html.parser` start tags |
 | Scripts / with `defer` or `async` | **19 / 0** | live source; `/knee-pain-lp/` is 12 / 0 |
 | Stylesheets | 13 (12 first-party) | live source; `/knee-pain-lp/` is 11 |
 
-**The rendered DOM is 1.8× the source DOM.** Lighthouse counts 3,197 elements; the delivered HTML contains 1,792. About 1,400 elements are created by JavaScript — the hero `<video>`, the ReviewWave chat widget, the UserWay widget, and Beaver Builder's own construction. DOM reduction cannot be assessed from the HTML alone.
+**The rendered DOM is 1.8× the source DOM.** Lighthouse counts 3,181 elements; the delivered HTML contains 1,774. About 1,400 elements are created by JavaScript — the hero `<video>`, the ReviewWave chat widget, the UserWay widget, and Beaver Builder's own construction. DOM reduction cannot be assessed from the HTML alone.
 
 ### LCP breakdown [LH]
 
 **Element:** `div.fl-row > div.fl-row-content-wrap > div.fl-bg-video > video` — as reported by Lighthouse, which inspects the **rendered DOM**. This element does not exist in the HTML.
 
-| Phase | % | Timing |
-|---|---|---|
-| TTFB | 4% | 700 ms |
-| **Load Delay** | **83%** | **15,760 ms** |
-| Load Time | 1% | 240 ms |
-| Render Delay | 12% | 2,190 ms |
+| Phase | 2026-08-13 | | 2026-07-30 | |
+|---|---|---|---|---|
+| TTFB | 5-21% | 602-2,192 ms | 4% | 700 ms |
+| **Load Delay** | **65-73%** | **7,527-7,901 ms** | **83%** | **15,760 ms** |
+| Load Time | 0% | 25-53 ms | 1% | 240 ms |
+| Render Delay | 5-30% | 504-3,652 ms | 12% | 2,190 ms |
+
+The element and the shape are identical on both dates: Load Delay dominates.
 
 Load Delay is the gap between navigation start and the browser beginning to fetch the LCP resource. C1 explains why it is that large.
 
@@ -88,25 +101,36 @@ Load Delay is the gap between navigation start and the browser beginning to fetc
 
 ## 3. Payload
 
-### On the wire — 5,123 KiB [LH]
+### On the wire — 16,925 KiB [LH Aug, run 1]
 
 | Source | KiB | % | Controllable? |
 |---|---|---|---|
-| **inceptionimages.com** | 3,196 | 62.4% | Partial — the CDN is agency-managed; the video is a BB setting |
-| — `hiking.mp4` (transferred) | 3,112 | **60.7%** | Yes |
-| — footer booking image | 84 | 1.6% | Yes |
-| **highcountrypainrelief.com** (1st party) | ~910 | ~17.8% | **Yes — full control** |
-| **YouTube thumbnails** (35 × `i.ytimg.com`) | 459 | 9.0% | Yes — facade pattern |
-| **Google Tag Manager** | 275 | 5.4% | Yes — audit container |
-| **UserWay** | 137 | 2.7% | Yes — defer |
-| **AWS S3** (ReviewWave config) | 58 | 1.1% | No — third-party |
-| **Google Fonts** | 57 | 1.1% | Yes — reduce families |
-| **ReviewWave** | 16 | 0.3% | Partial — can defer |
-| **Vimeo** | 15 | 0.3% | Thumbnail only; the iframes are template-deferred |
+| **inceptionimages.com** | 15,060 | **89.0%** | Partial — the host is agency-managed; the video is a BB setting |
+| — `hiking.mp4` (transferred) | ~14,968 | **88.4%** | Yes |
+| — footer booking image | 84 | 0.5% | Yes |
+| **highcountrypainrelief.com** (1st party) | ~911 | 5.4% | **Yes — full control** |
+| **YouTube thumbnails** (35 × `i.ytimg.com`) | 459 | 2.7% | Yes — facade pattern |
+| **Google Tag Manager** | 276 | 1.6% | Yes — see H6 |
+| **UserWay** | 72 | 0.4% | Yes — see H3 |
+| **AWS S3** (ReviewWave config) | 59 | 0.3% | No — third-party |
+| **Google Fonts** | 57 | 0.3% | Yes — reduce families |
+| **ReviewWave** | 16 | 0.1% | Partial — can defer |
+| **Vimeo** | 15 | 0.1% | Thumbnail only; the iframes are template-deferred |
+
+**July recorded 5,123 KiB with the video at 3,112 KiB and 60.7%.** Nothing on the site changed. The browser
+aborts the video download at a different point each run and did not abort at all in August, where it
+transferred the whole file in two range requests. Both numbers are real; neither is the number. The stable
+finding is that this one file dominates the page.
+
+UserWay's transfer fell from 137 KiB to 72 KiB between the two dates because **the vendor rolled a new
+build on 2026-08-10**. Its files are not the ones July measured.
 
 The Google Maps embed carries `loading="lazy"` and does not load on view. It is correctly absent from this table.
 
-**On the ReviewWave S3 object.** It appears at 58 KiB here, 55.7 KiB in H2, and 56 KiB in §6. All three are faithful transcriptions of *different Lighthouse rows* describing the same object, whose actual `Content-Length` is **56,589 B** (55.3 KiB). The spread is Lighthouse's, not this document's; no row has been altered to hide it.
+**On the ReviewWave S3 object.** It appears at 59 KiB here and 55.7-56 KiB elsewhere in this document —
+faithful transcriptions of *different Lighthouse rows* describing the same object. Its `Content-Length` was
+**56,589 B** on 2026-07-30 and **57,267 B** on 2026-08-13; it is a live data file, regenerated that
+morning.
 
 ### Through the parser — 1,514 KiB
 
@@ -114,12 +138,17 @@ Every first-party asset fetched twice, `Accept-Encoding: br,gzip` and `identity`
 
 ```
               wire (br)        parsed (raw)     ratio
-HTML             33,546            218,440       6.5x
-JS              160,061            618,211       3.9x   (16 files)
-CSS              90,115            713,944       7.9x   (12 files)
-TOTAL           283,722 B        1,550,595 B     5.5x
-                (277 KiB)        (1,514 KiB)
+HTML             33,290            216,956       6.5x
+JS             ~157,362           ~603,046       3.8x   (16 files)
+CSS             ~87,390           ~692,100       7.9x   (12 files)
+TOTAL          ~278,042 B       ~1,512,102 B     5.4x
+                (272 KiB)        (1,477 KiB)
 ```
+
+Three assets were re-measured on 2026-08-13 and all three shrank: the HTML by 1,484 B raw, and Beaver
+Builder's two compiled bundles — regenerated on 2026-08-11 by the 2.10.3.1 upgrade — by 15,165 B and
+21,844 B raw. `2-layout.js` is now 72,591 B raw / 15,884 B wire and `2-layout.css` 164,124 B / 17,986 B.
+The remaining files carry their July figures, so the totals above are approximate.
 
 Compression ratios range from 1.8× to 14.1× across individual files, so transfer size is a poor predictor of the work a change removes. What follows from that is H1.
 
@@ -131,7 +160,14 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
                                             both: cache-control: public, max-age=2592000
 ```
 
-`hiking.mp4` is 14.6 MiB on disk; Lighthouse recorded **3,112 KiB transferred**, because the browser aborts once enough is buffered and where it aborts varies per run. Transfer size is what costs the user; file size is what an encode decision is about.
+`hiking.mp4` is 14.6 MiB on disk. July recorded **3,112 KiB transferred**; all three August runs
+transferred essentially the whole file, in two range requests. Where the browser stops varies per run.
+
+**It is also not faststart.** Its 5,493-byte `moov` atom sits at the end of the file, behind 15,338,116
+bytes of `mdat`, so playback cannot begin until nearly all of it has arrived. One lossless remux fixes
+that — `ffmpeg -i hiking.mp4 -c copy -movflags +faststart` — with no re-encode and no visible change. See
+C1-F. The MP4 is 1920×1080 and 15.67 s long, which is what makes a 15.3 MB encode an encoding decision
+rather than a fact of nature.
 
 ---
 
@@ -208,7 +244,7 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
   .fl-bg-video video {min-width:100%;min-height:100%;width:auto;height:auto;}
   ```
 
-- **Impact:** The 15,760 ms Load Delay exists because the LCP element does not exist until `2-layout.js` (10,883 ms CPU [LH]) has evaluated. The 0.184 CLS is the `loadedmetadata` re-size of an absolutely-positioned `<video>` sized from its own intrinsic dimensions. Because the poster is a hardcoded 1×1 GIF and the real fallback is a background on that same JS-created element, **nothing paints early no matter how fast the image arrives.**
+- **Impact:** The Load Delay — 15,760 ms in July, 7,527-7,901 ms across the three August runs, 65-83% of LCP on both dates — exists because the LCP element does not exist until `2-layout.js` has evaluated. The 0.184 CLS is the `loadedmetadata` re-size of an absolutely-positioned `<video>` sized from its own intrinsic dimensions. **In August that shift appeared only on the cold-cache run**; both warm runs scored 0.000, so verify it cold. Because the poster is a hardcoded 1×1 GIF and the real fallback is a background on that same JS-created element, **nothing paints early no matter how fast the image arrives.**
 
 - **Fixes, in value order:**
 
@@ -216,7 +252,7 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
 
     | | Mobile, before | Mobile, after |
     |---|---|---|
-    | `hiking.mp4` / `hiking.webm` fetched | yes, 3,112 KiB | **no** — `src=""` on the `<video>` makes the browser ignore both `<source>` children |
+    | `hiking.mp4` / `hiking.webm` fetched | yes — 3,112 KiB in July, the full ~15 MB in all three August runs | **no** — `src=""` on the `<video>` makes the browser ignore both `<source>` children |
     | `<video>` in `.fl-bg-video` | present | **still present**, with `src=""` |
     | What paints | 1×1 GIF, then video frames | the fallback WebP, already set as `background-image` on the same element — **76,870 B, first-party** |
     | LCP element | the video | the fallback WebP |
@@ -224,7 +260,9 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
 
     **Do not verify this by checking for the absence of a `<video>`.** `wrap.append(videoTag)` appears in **both** branches — `grep -c 'wrap.append(videoTag)' 2-layout.js` returns 2 — so a correctly fixed page still has one, with `src=""`. Check that no request for `hiking.mp4` or `hiking.webm` is made.
 
-    *Verify while doing it:* an empty `src` resolves against the document URL, and some browsers issue a request for the page itself as media. Confirm in DevTools. This is small but real, and it is the one part of C1-A that could go wrong.
+    *One inference to confirm in DevTools:* whether `loadedmetadata` fires. Note BB's **first** sizing pass still runs — its guard is `if(0===$(this).find('video').length…){return;}` and a `<video src="">` passes it. One pass runs; the second is bound but should never fire.
+
+    An empty `src` does **not** cause a request for the page itself: the HTML media-element load algorithm jumps straight to the failure step when `src` is present and empty.
 
   - **B. Override both BB sizing passes** (~15 min). In the child theme — **`!important` is load-bearing**:
     ```css
@@ -243,7 +281,9 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
 
     This is the CLS fix on **desktop**, where A does not apply. If `!important` is unacceptable, the alternative is to unbind `loadedmetadata` on `.fl-bg-video video` after BB initialises; that is more fragile and needs a load-order guarantee.
 
-    *Not the fix:* setting a row height (the row is already sized by padding at all three breakpoints), or `aspect-ratio` on `.fl-bg-video` (`position:absolute` with all four insets `0`, so both axes are already definite and `aspect-ratio` is ignored). Rev. 2 recommended both.
+    *Not the fix:* setting a row height (the row is already sized by padding at all three breakpoints), or `aspect-ratio` on `.fl-bg-video` (`position:absolute` with all four insets `0`, so both axes are already definite and `aspect-ratio` is ignored).
+
+    **Target the served selector.** The stylesheet rule is `.fl-row-bg-video .fl-bg-video video` — specificity (0,3,1) — so a plain `.fl-bg-video video` override without `!important` loses twice: to that rule and to the inline styles.
 
   - **C. Make something paint early** (~20 min). Move the fallback onto an element that exists in the served HTML, and warm its connection:
     ```html
@@ -256,13 +296,20 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
     ```
     **The preload alone paints nothing.** It warms the HTTP cache for an image that only ever gets applied to an element BB creates later. The CSS rule is the half that makes it visible. The poster file is 76,870 B, confirmed live.
 
-    **Scope note.** The poster is on `www.highcountrypainrelief.com` — **first-party, already connected**. The `preconnect` above is for the *video* host and is justified by H5, not by this poster. Once C1-A ships, that preconnect is **inert on mobile**, because nothing on `chiro.inceptionimages.com` is fetched there. It still earns its place on desktop. Rev. 3 bundled the two without saying so.
+    **Scope note.** The poster is on `www.highcountrypainrelief.com` — **first-party, already connected**. The `preconnect` is for the *video* host and is justified by H5, not by this poster. It still earns its place after C1-A: **six `<img>` elements on this page load from `chiro.inceptionimages.com` on every device**, plus CSS backgrounds from the same host, so that connection is on the critical path whether or not the video is disabled.
 
   - **D. Serve WebM only** (~15 min, **with a caveat**). Clearing the MP4 field in the BB row leaves a 5.8 MB source instead of 15.3 MB, and BB accepts it (`if('undefined'!=typeof mp4&&''!=mp4)`). **But iOS Safari only gained full WebM support in 17.4**, and macOS Safari in 16.0 — below those, visitors get the fallback image instead of the video. That is a design change on a real slice of a local practice's traffic. If A ships, D matters only on desktop.
 
   - **E. Replace the video with a static image** (1-2 hrs + design approval). Removes the problem outright on all profiles.
 
-  - **Recommended:** **A + B + C.** About 40 minutes, no design approval, and between them they cover mobile and desktop.
+  - **F. Remux the MP4 for streaming** (~30 min, desktop only, no visible change). `hiking.mp4` is **not faststart**: its 5,493-byte `moov` atom sits behind 15,338,116 bytes of `mdat`, so the browser cannot start playback until nearly the whole file has arrived. Lossless, no re-encode:
+    ```bash
+    cp hiking.mp4 hiking.mp4.bak
+    ffmpeg -i hiking.mp4 -c copy -movflags +faststart hiking-faststart.mp4
+    ```
+    Needs shell access on the media host with ffmpeg, or download-remux-upload over FTP. **The file sits in a shared Inception media library** and may be referenced by other client sites; the remux keeps it byte-compatible, but keep the backup. The WebM is already streaming-friendly — its SeekHead, Info and Tracks are all in the first 100 bytes.
+
+  - **Recommended:** **A + B + C**, about 40 minutes, no design approval, covering mobile and desktop. Add **F** if the media host is reachable — it is the only item that helps desktop without changing how the page looks.
 
 - **Projected outcome:** on the emulated-mobile profile Lighthouse measures, A removes the LCP element and the CLS contributor outright. Do not project a score — see §9.
 - **Verification:** with a mobile UA, DevTools Network shows **no request to `hiking.mp4` or `hiking.webm`**, and the LCP element is `Chronic-Pain-Boone-NC-Hiking.webp`. Do **not** check for the absence of a `<video>` element — one remains, with `src=""`. With a desktop UA, CLS ≤ 0.1 and `Avoid large layout shifts` lists no non-zero shift.
@@ -301,25 +348,32 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
 
 ---
 
-**C2: Main-thread work 36.9 s — TBT 14,710 ms** [LH]
+**C2: Main-thread work — the ranking is stable, the absolute figures are not** [LH]
 
 - **Evidence:**
 
-  | Category | Time | | Source | Total CPU |
-  |---|---|---|---|---|
-  | Script Evaluation | 16,263 ms | | `cache/2-layout.js` | 10,883 ms |
-  | Other | 10,512 ms | | the HTML document | 10,224 ms |
-  | Parse HTML & CSS | 5,664 ms | | UserWay | 5,363 ms |
-  | Style & Layout | 3,355 ms | | Unattributable | 4,755 ms |
-  | Rendering | 501 ms | | `jquery.min.js` | 1,589 ms |
-  | Script Parse & Compile | **383 ms** | | `swiper.min.js` | 1,497 ms |
-  | Garbage Collection | 234 ms | | GTM | 1,448 ms |
+  | Category | Aug (11.2 s) | Jul (36.9 s) | | Source | Aug | Jul |
+  |---|---|---|---|---|---|---|
+  | Script Evaluation | 4,156 ms | 16,263 ms | | `cache/2-layout.js` | **2,371 ms** | **10,883 ms** |
+  | Other | 3,260 ms | 10,512 ms | | the HTML document | 3,115 ms | 10,224 ms |
+  | Style & Layout | 1,583 ms | 3,355 ms | | UserWay | 1,150 ms | 5,363 ms |
+  | Parse HTML & CSS | 1,395 ms | 5,664 ms | | Unattributable | 2,308 ms | 4,755 ms |
+  | Rendering | 364 ms | 501 ms | | `jquery.min.js` | 650 ms | 1,589 ms |
+  | Script Parse & Compile | **289 ms** | **383 ms** | | `swiper.min.js` | — | 1,497 ms |
+  | Garbage Collection | 125 ms | 234 ms | | GTM | — | 1,448 ms |
 
-  20 long main-thread tasks. 5 non-composited animations.
+  July: 20 long main-thread tasks, 5 non-composited animations.
 
-- **Impact:** TBT is 74× the threshold. `2-layout.js` is the largest first-party cost at 10,883 ms, of which 10,081 ms is *evaluation* — and much of that evaluation is DOM construction (M2), not parsing. **Script Parse & Compile is 383 ms, about 1% of the total** — the basis for H1.
+- **Impact:** the two dates differ by roughly 3.5× on every CPU row, on a site whose scripts barely changed. **Lighthouse applies a fixed ×4 CPU multiplier to whatever host runs it**, so these totals describe the test machine as much as the page. August ran at `benchmarkIndex` ≈ 1,300; July's was not recorded.
+
+  What survives both runs, and is what to act on:
+  - **`2-layout.js` is the largest first-party script cost on both dates**, and most of it is *evaluation* — DOM construction (M2), not parsing
+  - **UserWay is the largest third party on both dates**, GTM second, ReviewWave third
+  - **Script Parse & Compile is ~1-3% of the total on both dates** (383 ms of 36,900; 289 ms of 11,200) — the basis for H1
+
+  **TBT is not a Core Web Vital and Google publishes no threshold for it.** It is a lab proxy for INP, which cannot be measured without real visitors. Reporting it as "74× over" treated a Lighthouse scoring boundary as a Google threshold.
 - **Fix:** C0 first. Then H2, H3, H6. `2-layout.js` shrinks only when the page carries fewer modules.
-- **Verification:** `Minimize main-thread work` under 20 s; TBT trending down across a median of 3 runs, not 1.
+- **Verification:** compare the **per-script CPU column** across a median of 3 runs on the *same machine* before and after. Absolute totals from different hosts are not comparable.
 
 ---
 
@@ -337,32 +391,44 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
 
 ---
 
-**H2: 11 render-blocking resources — 1,370 ms estimated savings** [LH]
+**H2: 11 render-blocking resources — 1,330 ms estimated savings** [LH Aug; 1,370 ms Jul]
 
 - **Evidence:**
 
-  | Group | Count | Transfer | Est. savings |
-  |---|---|---|---|
-  | highcountrypainrelief.com | 7 | 104.3 KiB | 1,950 ms |
-  | `rw-embed-data.s3.amazonaws.com` | 1 | 55.7 KiB | 1,570 ms |
-  | `cdn.reviewwave.com` | 2 | 11.5 KiB | 940 ms |
-  | `fonts.googleapis.com` | 1 | 1.2 KiB | 790 ms |
+  Per resource, 2026-08-13 (July's figure in brackets where it differs):
 
-  Lighthouse's headline "1,370 ms" does not equal the sum of its own per-group rows, which total 5,250 ms. Both are transcribed as reported; the discrepancy is Lighthouse's, and it means neither figure should be treated as a prediction.
+  | Est. savings | Transfer | Resource |
+  |---|---|---|
+  | **1,451 ms** [1,570] | 56.3 KiB | `rw-embed-data.s3.amazonaws.com/6809-a7ea-…js` |
+  | 790 ms | 1.5 KiB | `fonts.googleapis.com/css?family=Raleway…` |
+  | 761 ms | 4.1 KiB | `cdn.reviewwave.com/js/reviews_embed.js` |
+  | 306 ms [450] | 29.1 KiB | `jquery.min.js` |
+  | 306 ms | 17.9 KiB | `bootstrap.min.css` |
+  | 306 ms | 14.8 KiB | `layout-bundle.css` |
+  | 153 ms | 7.1 KiB | `bb-theme/skin-*.css` |
+  | 152 ms [150] | 7.4 KiB | `cdn.reviewwave.com/js/chat_embed.js` |
 
-  First-party detail: `jquery.min.js` 450 ms, `2-layout.css` 450 ms, `bootstrap.min.css` 300 ms, `layout-bundle.css` 300 ms, `all.min.css` 150 ms, `skin-*.css` 150 ms, `jquery.fancybox.min.css` 150 ms.
+  **The three largest are ReviewWave and Google Fonts on both dates.** The headline does not equal the sum of its own rows on either date; neither figure is a prediction.
 
-  Verified live: **19 scripts, 0 `defer`, 0 `async`**, and 12/0 on `/knee-pain-lp/`. Five scripts sit in `<head>`: `jquery.min.js`, `jquery-migrate.min.js`, and all three ReviewWave scripts.
+  Verified live on both dates: **19 scripts with `src`, 0 `defer`, 0 `async`** (32 `<script>` tags in total), and 12/0 on `/knee-pain-lp/`. Five scripts sit in `<head>`: `jquery.min.js`, `jquery-migrate.min.js`, and all three ReviewWave scripts.
+
+  **ReviewWave is six resources, not three.** The two embed scripts each inject a stylesheet at runtime, and `chat_embed.js` fetches a second S3 config. Total **73,995 B transfer / 120,119 B uncompressed over 6 requests**, none carrying `Cache-Control`.
 - **Fix:** `defer` on `reviews_embed.js`, `chat_embed.js`, and the S3 config — all three are in `<head>` and none is needed before first paint. `&display=swap` on the fonts URL (M5). Combine the four BB/theme stylesheets. **Keep `jquery.min.js` synchronous** unless every interaction is regression-tested; jQuery Migrate loading alongside it (L6) is direct evidence of legacy call sites.
-- **Risk, and it is not small:** `defer` breaks any third-party embed that uses `document.write`, and two of these three scripts are the **review carousel and the chat widget** — a lead channel for a medical practice. Budget a regression pass on both, not just a Lighthouse re-run. Rev. 2 listed this step at 20 minutes with no risk note.
+- **Risk:** two of these three scripts are the **review carousel and the chat widget** — a lead channel for a medical practice. Budget a regression pass on both, not just a Lighthouse re-run.
+
+  The usual `defer` hazard does **not** apply here, and it was checked: **zero `document.write`** in all three files. Both embeds self-locate with `document.querySelectorAll('script[src*="…"]')` rather than `document.currentScript`, which is defer-safe; `defer` preserves document order so the S3 config still runs before `reviews_embed.js` consumes `window._rwReviewEmbed`; and `chat_embed.js` carries a 500 ms `setTimeout` fallback. Rev. 2 listed this step at 20 minutes with no risk note.
 - **Effort:** 30 min for the change, plus regression testing.
 - **Verification:** render-blocking savings ≤ 200 ms **and** the chat widget still opens and submits.
 
 ---
 
-**H3: UserWay — 2,443 ms main-thread blocking, 137 KiB** [LH]
+**H3: UserWay — the largest third party on both measurement dates** [LH]
 
-- **Evidence:** `widget_app_base_178….js` (47 KiB) blocks 2,354 ms; `widget_base.css` (71 KiB) 87 ms; `widget.js` (2 KiB) 2 ms. Total CPU 5,363 ms. Lighthouse's own 137 KiB total exceeds its sub-rows' 120 KiB; both are transcribed as reported. Injected by this inline block, captured verbatim:
+- **Evidence:** blocking of **2,443 ms / 137 KiB** in July and **481-495 ms / 72 KiB** in August — 64% and ~60% of all third-party blocking respectively, first place on both dates.
+
+  **The August files are not the ones July measured.** UserWay rolled a new build on **2026-08-10**, eleven days after the July run; `widget.js` now points at build `2026-08-10-10-33-59`. Treat July's per-file CPU figures as describing a bundle that is no longer served.
+
+  Injected by this inline block, captured verbatim:
 
   ```js
   (function(e){
@@ -375,9 +441,20 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
 
   UserWay is a **WordPress plugin** here (`userway/v1` in `/wp-json/`, with `/save` and `/debug` routes), not a hand-placed snippet.
 - **Impact:** largest single third party — 64% of all third-party blocking, for 2.7% of payload. Loads for every visitor whether or not accessibility features are used.
-- **Fix, in order of preference:**
-  1. **Check the plugin's own settings first.** It has a settings endpoint; many accessibility-widget plugins ship a defer or on-demand mode. If one exists, that is the whole fix.
-  2. Otherwise dequeue the plugin's output and re-emit on idle **with a timeout**:
+- **Fix.** Two questions the July audit left open are now settled, and they point in opposite directions:
+
+  - ❌ **The plugin has no defer, delay, async or mobile setting.** Its entire frontend contribution is one echo of the inline snippet; `/userway/v1/debug` returns only `{account_id, state, created_time, updated_time}`, and UserWay's public help centre has 36 widget articles, none covering deferred loading. Checking the settings first is a dead end.
+  - ✅ **Unhooking it is one line, not 60-90 minutes.** The plugin registers its output with `add_action('wp_footer','usw_addplugin_footer_notice')` — a named global function at default priority 10, so `remove_action` with the same arguments removes it.
+
+  There is also an **undocumented mobile kill switch** in `widget.js`: if `window._userway_config.mobile` is `false` and the user agent matches `/mobile/i`, the script exits without loading the app. Five lines in the child theme, emitted before the snippet, remove **51,813 B of transfer and 181,374 B of parsed JS+CSS on mobile** — a genuine removal rather than a deferral.
+
+  ```php
+  add_action( 'wp_footer', function () { ?>
+  <script>window._userway_config = window._userway_config || {}; window._userway_config.mobile = false;</script>
+  <?php }, 5 );
+  ```
+
+  To keep the toolbar and merely delay it, dequeue the plugin's output and re-emit on idle **with a timeout**:
      ```js
      (window.requestIdleCallback || function (cb) { setTimeout(cb, 2000); })(function () {
        var s = document.createElement('script');
@@ -386,9 +463,11 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
        document.body.appendChild(s);
      }, {timeout: 3000});
      ```
-     The `{timeout: 3000}` is not optional here. Without it `requestIdleCallback` can be starved indefinitely, and this page has 36.9 s of main-thread work and 20 long tasks — close to the worst realistic case for idle ever arriving. Dynamically-created scripts are already async, so setting `.defer = true` on one is a no-op — which is what the 2026-07-28 original's snippet did.
-- **Effort:** 15 min if the plugin has a setting. **60-90 min if not** — removing a plugin's `wp_head`/`wp_footer` output needs the exact hook, priority, and callback, and a closure or object-method callback cannot be removed by name at all. Rev. 2's "30 minutes" assumed a hand-placed snippet.
-- **Accessibility note, stated honestly:** UserWay is an accessibility overlay. With `{timeout: 3000}` it is unavailable for at least three seconds, and on a cold load plausibly longer. That is a real cost to the users who most need it, and it is a decision for whoever owns accessibility — not a free win. Removing the overlay entirely is a separate question with legal dimensions, out of scope here.
+     The `{timeout: 3000}` is not optional. Without it `requestIdleCallback` can be starved indefinitely, and this page carried 20 long main-thread tasks when that was last counted — close to the worst realistic case for idle ever arriving. Dynamically-created scripts are already async, so setting `.defer = true` on one is a no-op.
+- **Effort:** 45-90 min, including the accessibility decision below. The hook is a named global function, so the removal itself is one line.
+- **Accessibility decision, not a free win.** UserWay is an accessibility overlay. The idle option makes it unavailable for at least three seconds and on a cold load longer; the mobile kill switch removes it from phones entirely. Both cost the visitors who most need it. This belongs to whoever owns accessibility, in writing, before the work. Removing the overlay entirely is a separate question with legal dimensions, out of scope here.
+
+  Note also that the idle option **moves** the cost rather than deleting it: UserWay's app script is already async and already waits for `DOMContentLoaded` inside `widget.js`, so this is a CPU-contention fix, not a render-blocking one. Only the mobile kill switch removes work.
 - **Verification:** third-party audit shows UserWay under 200 ms blocking, **and** the widget still appears within 5 s.
 
 ---
@@ -438,17 +517,29 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
 
 ---
 
-**H6: Google Tag Manager — 1,165 ms blocking, 275 KiB** [LH]
+**H6: Google Tag Manager — 276 KiB to deliver a single analytics tag** [LH]
 
 - **Evidence:** `gtm.js?id=GTM-WGXQKR5` — 115 KiB, 831 ms blocking. `gtag/js?id=G-CW4KKYCP1V` — 159 KiB, 334 ms. Total CPU 1,448 ms. `GTM-WGXQKR5` appears in live source; `G-CW4KKYCP1V` does not, so it is loaded by the container at runtime — i.e. a container tag, not a separate install.
 - **Impact:** second-largest third-party blocker, and the largest third-party payload after the image CDN — more than UserWay and ReviewWave combined. The 2026-07-28 original called it "4 KB, minimal, already async — OK, 0 savings," understating transfer by roughly 70× and missing the blocking cost entirely.
-- **Fix:** an async loader does not make a container's contents cheap. Audit the container: remove unused tags, unfired triggers, duplicate analytics; deduplicate if more than one tag pulls gtag. Consider server-side tagging if it cannot be slimmed.
-- **Effort:** 1-2 hrs. A container audit, not a code change.
-- **Verification:** GTM transfer under 100 KiB; blocking under 300 ms.
+- **Fix — and "audit the container" is not it.** The container's own resource JSON, extracted from `gtm.js`, holds **exactly one tag** (`__googtag` → `G-CW4KKYCP1V`, `send_page_view=true`), one variable, one trigger and one rule. There are no unused tags to prune and no duplicate analytics to deduplicate; a container audit would return nothing.
+
+  The choice is binary: keep GTM for future flexibility, or retire it and load the single tag directly.
+
+  ```html
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-CW4KKYCP1V"></script>
+  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}
+  gtag('js',new Date());gtag('config','G-CW4KKYCP1V');</script>
+  ```
+
+  Retiring it removes **116,234 B of download per cold load** (`gtm.js` is `private, max-age=900`, so it is reused within a 15-minute session) and **333,526 B of JavaScript parsed and executed on every page view**, cached or not. What the practice loses is the ability to add or change tags without a developer — a real capability, and a decision for whoever owns the GTM account.
+
+  **Verify analytics before and after in GA Realtime.** Solid Security is installed, which raises the odds of a hand-placed script tag being stripped.
+- **Effort:** 30 min, plus written sign-off from the GTM account owner and a mandatory analytics check.
+- **Verification:** `grep -o 'GTM-WGXQKR5' | wc -l` returns 0 and `grep -o 'gtag/js?id=G-CW4KKYCP1V' | wc -l` returns 1 — **and** you appear in GA Realtime within 60 seconds of loading the page from a phone.
 
 ---
 
-**H7: 25,169 B per page of WordPress core CSS/JS this site cannot use**
+**H7: 25,256 B per page of WordPress core CSS/JS this site cannot use**
 
 - **Evidence:** measured on `/`, confirmed present on `/knee-pain-lp/`, so this applies to all 44 sitemap URLs.
 
@@ -462,11 +553,11 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
   | `classic-theme-styles-inline-css` | 350 | — |
   | `wp-emoji-styles-inline-css` | 340 | — |
   | `wp-img-auto-sizes-contain-inline-css` | 135 | — |
-  | **Total, always delivered** | **25,169 B** | |
+  | **Total, always delivered** | **25,256 B** (2026-08-13; 25,169 B on 07-30) | |
 
   **Conditional — usually not fetched:** `wp-emoji-release.min.js`, 22,752 B. It is **not** a `<script src>`. Its only occurrence is inside the inline `wp-emoji-settings` JSON as `concatemoji`, and the loader fetches it **only if the browser fails the emoji support test**. Real iOS, Android, Windows, and macOS browsers pass. Headless Chrome on a font-less container fails, which is why Lighthouse saw it.
 
-  **Do not sum the two groups.** For real visitors the figure is **25,169 B**; the other 22,752 B inflates Lighthouse and not user experience.
+  **Do not sum the two groups.** For real visitors the figure is **25,256 B**; the other 22,752 B inflates Lighthouse and not user experience. The five CSS blocks are byte-identical on both dates; the emoji detection script grew 2,982 → 3,069 B with the WordPress 7.0.4 update.
 
 - **Fix:** in the child theme, **hooked correctly** — a bare `wp_dequeue_style` outside an enqueue hook is a no-op:
   ```php
@@ -479,7 +570,7 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
   remove_action('wp_head', 'print_emoji_detection_script', 7);
   ```
 
-  **Use `wp_print_styles`, not `wp_enqueue_emoji_styles`.** WordPress 7.0.2 `wp-includes/default-filters.php`:
+  **Use `wp_print_styles`, not `wp_enqueue_emoji_styles`.** WordPress `wp-includes/default-filters.php`:
 
   ```php
   add_action( 'wp_enqueue_scripts', 'wp_enqueue_emoji_styles' );
@@ -500,7 +591,7 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
 
   The deprecation is real (`@deprecated 6.4.0`) but does not make the removal a no-op. Priority `7` on `print_emoji_detection_script` and priority `100` on the dequeues are both correct — all three style handles register at priority 10. `wp-img-auto-sizes-contain` (135 B) has no clean removal and is not worth one.
 - **Effort:** 30 min.
-- **Verification:** `curl -s <url> | grep -c global-styles-inline-css` returns 0, **and** raw HTML drops by ~25,000 B — from 218,440 B to roughly 193,000 B. Rev. 2 set the target at "<175,000 B", which its own itemisation cannot reach; an implementer following it would have gone hunting for a bug that does not exist.
+- **Verification:** `curl -s <url> | grep -c global-styles-inline-css` returns 0, **and** raw HTML drops by ~25,000 B — from **216,956 B to roughly 192,000 B**.
 - **Risk:** low but non-zero. Check any page using a Gutenberg block or core block pattern first. Neither sampled page contains one, and `sitemap_index.xml` lists only `page-sitemap.xml` — there are no posts — which narrows the exposure further.
 
 ---
@@ -530,7 +621,7 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
   Chronic-Pain-Boone-NC-Neuropathy.webp                no dimensions
   ```
 
-  **Rev. 3 claimed that correlation was probably causal. It is not, on this page.** The core mechanism is real — `wp-includes/media.php` in WP 7.0.2 returns early from the loading-optimization pass unless the tag already has both `width` and `height`. But it is not what governs these images. Of the **16 images that already have `loading="lazy"`, 6 have no `width`/`height` at all.** Those six carry `loading="lazy"` at the *end* of the tag and no `wp-image-NNNN` class; the ten that do have dimensions carry it *prepended*, which is core's `str_replace` signature. Beaver Builder emits lazy itself on external-URL photos. Adding dimensions will therefore **not** make lazy appear for free.
+  **Adding dimensions does not make core add lazy-loading here.** The core mechanism is real — `wp-includes/media.php` returns early from the loading-optimization pass unless the tag already has both `width` and `height`. But it is not what governs these images. Of the **16 images that already have `loading="lazy"`, 6 have no `width`/`height` at all.** Those six carry `loading="lazy"` at the *end* of the tag and no `wp-image-NNNN` class; the ten that do have dimensions carry it *prepended*, which is core's `str_replace` signature. Beaver Builder emits lazy itself on external-URL photos. Adding dimensions will therefore **not** make lazy appear for free.
 
   **And the 6 targets are not one editable field.** They span three plugins:
 
@@ -542,10 +633,30 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
   ```
 
   The four UABB Info Box images need a template override or an output filter, not an attribute edit. Rev. 3 scoped this at 20 minutes on the strength of the causal claim.
-- **Fix:** **(a)** Add `width`/`height` to the 6 that lack them, then check whether lazy appears on its own. Leave the ribbon eager if it is above the fold — but strip its `fetchpriority` (H4). **(b)** YouTube facade for the 35 thumbnails: `lite-youtube-embed` (~3 KiB JS + ~1 KiB CSS, Apache-2.0, no dependencies). See `audit/03` §3.
+- **Fix — do (0) first; it is settings-only and was missed until 2026-08-13.**
+
+  **(0) Untick Loop and untick Autoplay on the Video Gallery module**, on `/` and on `/testimonials/`. Both are the cheapest wins on this page.
+
+  *Loop:* PowerPack passes `loopedSlides: this._getSlidesCount()` — **35** — to Swiper, whose `loopCreate` then prepends *and* appends 35 deep clones each, producing the **105 children** Lighthouse counted on both dates. Swiper's own default at `slidesPerView: 1` would be 2 clones. Unticking it removes roughly **1,286 JavaScript-built DOM elements**.
+
+  *Autoplay:* the compiled bundle reads, in three consecutive statements —
+  ```js
+  options.carousel={ … autoplay:false, … };
+  options.carousel.autoplay={delay:3000,disableOnInteraction:true,};
+  gallery_joy14c0h3re9=new PPVideoGallery(options);
+  ```
+  — so the literal `autoplay:false` is overwritten one statement later, and `_getSwiperOptions` contains `if(!this.isBuilderActive&&this.carousel.autoplay){options.autoplay=this.carousel.autoplay;}` with `isBuilderActive:false`. **Autoplay is on**: a 1,000 ms transform every 3,000 ms, forever, across 105 slides, each invoking Swiper's `loopFix()`. That cost continues for as long as the page is open, not just at load.
+
+  **(a)** Add `width`/`height` to the images that lack them. Leave the ribbon eager if it is above the fold — but strip its `fetchpriority` (H4).
+
+  **(b)** YouTube facade for the 35 thumbnails: `lite-youtube-embed` 0.3.4, Apache-2.0, no dependencies — 10,630 B JS + 2,767 B CSS uncompressed, 3,960 B + 1,273 B gzipped. See `audit/03` §3.
+
+  **A naive facade swap makes this worse.** `lite-youtube-embed`'s `connectedCallback` sets `style.backgroundImage` to the same `i.ytimg.com/vi/{id}/hqdefault.jpg` URL *and* fires a second request per video to `i.ytimg.com/vi_webp/{id}/sddefault.webp` — taking 35 requests to about 70. Use its own `if (!this.style.backgroundImage)` guard by setting the poster yourself, or self-host the 35 posters.
+
+  **`/testimonials/` carries a second, larger instance of the same gallery** — 39 slides, its own copy of Swiper, on a 224,593 B page bigger than the homepage. There are **39 distinct videos site-wide**; the homepage's 35 are a strict subset. Do both pages.
 - **Effort:** (a) **1-2 hrs** — one BB photo module, one PowerPack module, and four UABB Info Box images needing a template override or filter. (b) 2-3 hrs for 35 replacements, or 1-2 hrs via WP YouTube Lyte if its shortcode renders inside BB text modules.
-- **Verification:** zero `i.ytimg.com` requests on load; `Defer offscreen images` savings under 100 KiB.
-- **Worth more than it looks:** the gallery is a PowerPack module and is what pulls `swiper.min.js` (143,660 B raw, 1,497 ms CPU). After the facade, check whether Swiper still enqueues — see M4.
+- **Verification:** after (0), `curl … | grep -o 'options.carousel.autoplay='` returns nothing and max child elements drops from 105. After (b), `i.ytimg.com` references equal the number of videos kept — **and not 70**. `swiper.min` returns 0 on `/` **and** `/testimonials/`.
+- The gallery is what pulls `swiper.min.js` (143,660 B raw / 38,121 B Brotli, 1,497 ms CPU in July). Swiper loads on **exactly 2 of 44 pages** — this gallery and the one on `/testimonials/` — so removing both removes Swiper. See M4.
 
 ---
 
@@ -595,14 +706,20 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
 
 ---
 
-**M2: 3,197 rendered DOM elements — 44% of them do not exist in the HTML** [LH + fresh]
+**M2: 3,181 rendered DOM elements — 44% of them do not exist in the HTML** [LH + fresh]
 
-- **Evidence:** Lighthouse: 3,197 elements, max depth 28 (`div.pp-video-play-icon > svg > g > path`), max child elements 105 (`div.pp-video-gallery-items.swiper-wrapper`). The delivered HTML contains **1,792** start tags (`html.parser`). About 1,400 elements are created by JavaScript.
+- **Evidence:** Lighthouse counts **3,181** elements on 2026-08-13 and 3,197 on 07-30, with max depth **28** and max child elements **105** on both dates (`div.pp-video-gallery-items.swiper-wrapper`). The delivered HTML contains **1,774** start tags (1,792 in July). About 1,400 elements are created by JavaScript.
 
-  Of the 1,792, **218 are `<meta>` and 198 of those are microdata `itemprop`** — six per video across 33 `VideoObject` blocks, emitted by PowerPack's video module. 760 are `<div>`. (The gallery carries 35 YouTube thumbnails and 35 `data-src` iframes but only 33 `VideoObject` blocks; the two-video gap is unexplained and worth a look if the microdata matters to you.)
-- **Impact:** drives Parse HTML & CSS (5,664 ms) and Style & Layout (3,355 ms), and explains why `2-layout.js` costs 10,883 ms — much of that is DOM construction.
+  **The 105 is Swiper's loop clones, and it is settings-only to remove** — see H8(0).
+
+  Of those, **218 are `<meta>` and 198 of those are microdata `itemprop`** — six per video across 33 `VideoObject` blocks, emitted by PowerPack's video module. 760 are `<div>`.
+
+  **The 35-thumbnail / 33-block gap is explained:** 31 of the gallery's 35 slides carry `itemscope`, four do not, and two standalone video modules outside the carousel supply the remaining two blocks. The four without are `cvbQYotHZb0`, `TGw16jnwcGE`, `TGm19YJWH8c` and `CGBDsDLkNIE` — a content-entry gap, not a plugin defect.
+- **Impact:** drives Parse HTML & CSS (1,395 ms Aug / 5,664 ms Jul) and Style & Layout (1,583 / 3,355 ms), and explains why `2-layout.js` is the largest first-party script cost on both dates — much of it is DOM construction.
 - **Fix:** the H8 facade removes markup as well as requests. Consolidate duplicated desktop/mobile navigation into one responsive nav. Reduce footer widget areas.
-- **Tradeoff, not a defect:** the 198 microdata tags are valid `VideoObject` structured data that Google reads — about 11% of source elements. Do not remove them as a performance measure without an SEO decision, and note the H8 facade may remove them as a side effect. Flag that before it happens.
+- **Tradeoff, not a defect:** the gallery emits **31** `VideoObject` blocks across **186** meta tags — not 33/198; two standalone video modules outside the carousel are separate and keep their markup. Four gallery slides (`cvbQYotHZb0`, `TGw16jnwcGE`, `TGm19YJWH8c`, `CGBDsDLkNIE`) carry no `itemscope` at all, which is a content-entry gap worth fixing separately.
+
+  A facade emits **zero** structured data — *will*, not *may*. Re-emit one JSON-LD `ItemList` using the property values already in the HTML, describing **exactly the videos rendered on that page**; markup for videos not on the page is what Google's guidelines prohibit. Drop `contentUrl` and keep `embedUrl` (these are YouTube-hosted). Do not invent `uploadDate` — today's values are four bulk placeholders across 33 videos, 22 of them sharing `2025-02-21T10:00America/Chicago`, which is not valid ISO 8601. Get real dates from YouTube or omit the key.
 - **Effort:** 3-4 hrs; more if theme-level changes are needed.
 - **Verification:** rendered DOM under 2,500 as a realistic first target.
 
@@ -645,7 +762,7 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
 - **Evidence, live:**
 
   ```
-  //fonts.googleapis.com/css?family=Raleway:700,400,300,800,600|Work%20Sans:700|Inter:600|Audiowide:400|Oxygen:300,700&ver=7.0.2
+  //fonts.googleapis.com/css?family=Raleway:700,400,300,800,600|Work%20Sans:700|Inter:600|Audiowide:400|Oxygen:300,700&ver=7.0.4
   ```
 
   No `display` parameter. `Ensure text remains visible during webfont load` fails. Font files total 57 KiB, cached 1 year at `fonts.gstatic.com`. Web font loading is the stated root cause of layout shift #2 — which scores **0.000**, so this is an FCP fix, not a CLS fix.
@@ -662,11 +779,11 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
 - **Evidence:**
 
   ```html
-  <link rel='stylesheet' id='fl-child-theme-css' href='…/themes/bb-theme-child/style.css?ver=7.0.2' media='all' />
-  …/plugins/bb-ultimate-addon/modules/modal-popup/js/js_cookie.js?ver=7.0.2
+  <link rel='stylesheet' id='fl-child-theme-css' href='…/themes/bb-theme-child/style.css?ver=7.0.4' media='all' />
+  …/plugins/bb-ultimate-addon/modules/modal-popup/js/js_cookie.js?ver=7.0.4
   ```
 
-  `7.0.2` is the WordPress core version — the fallback when a script is enqueued with no version argument.
+  That value is the WordPress core version — the fallback when a script is enqueued with no version argument. It read `7.0.2` on 2026-07-30 and `7.0.4` on 08-13, i.e. it changed for a reason unrelated to either file. **This is a live trap for Tickets 1 and 3**: a child-theme CSS edit will not reach a returning visitor for 30 days.
 - **Impact:** static assets carry `max-age=2592000`. **An edit to the child theme's `style.css` will not reach a returning visitor for 30 days**, or until WordPress core updates for unrelated reasons. Anyone making CSS fixes here will watch them ship and appear not to work.
 - **Fix — and the mechanism here is inferred, not verified.** The handle is `fl-child-theme`. The `fl-` prefix is the parent theme's namespace, which *suggests* BB Theme registers the child stylesheet itself; if so, enqueuing it again from the child is a duplicate or a no-op. But BB Theme's parent is premium and not publicly readable, and Beaver Builder's own published starter child theme does the opposite — it enqueues under handle `child-style` with an explicit version. **Check `bb-theme-child/functions.php` before choosing.** If the child registers it, adding a `$ver` argument is the whole fix. If the parent registers it, use one of:
   - dequeue and re-register under the same handle at a late priority with `filemtime()` as the version, or
@@ -741,7 +858,7 @@ https://www.chiro.inceptionimages.com/wp-content/uploads/2018/02/hiking.webm    
 
 ## 5. Vendored Library Currency
 
-WordPress core and the plugins are current — 7.0.2 is what `api.wordpress.org` reports as `current`, Yoast 28.1 is the latest release, Beaver Builder 2.10.3 sits ahead of the public lite build. **The stale code is bundled inside those current plugins**, and no plugin update reaches it:
+WordPress core and the plugins are current — 7.0.4 as at 2026-08-13, Yoast 28.1 is the latest release, Beaver Builder 2.10.3.1 sits ahead of the public lite build. **The stale code is bundled inside those current plugins**, and no plugin update reaches it:
 
 | Library | Version | Age | Raw bytes | Ships with |
 |---|---|---|---|---|
@@ -774,9 +891,19 @@ Versions read from each file's own banner comment, not from its `?ver=` string. 
 | Vimeo ×2 | player.vimeo.com | inside `<script type="text/html">` | 0 ms | 15 KiB thumb | already deferred |
 | Google Fonts | fonts.gstatic.com | sync CSS | 0 ms | 57 KiB | `display=swap` (M5) |
 
-**Third-party blocking measured by Lighthouse: 3,820 ms** — UserWay 2,443 ms (64%), GTM 1,165 ms (30%), ReviewWave 196 ms (5%), S3 14 ms. Lighthouse reports the ReviewWave figure only in aggregate; the per-file splits that circulated in earlier revisions do not appear in the source data and have been removed.
+**Third-party blocking, both dates:**
 
-The ReviewWave S3 config, re-verified: `Content-Length: 56589` returned identically under `identity`, `gzip`, and `br,gzip` — no compression is available — with **no `Cache-Control`**, and `ETag` + `Last-Modified` present. The object metadata belongs to ReviewWave; the only fix available from this site is `defer`.
+| | 2026-08-13 | 2026-07-30 | Rank |
+|---|---|---|---|
+| UserWay | **481-495 ms** | **2,443 ms** (64%) | 1st, both |
+| Google Tag Manager | **297-351 ms** | **1,165 ms** (30%) | 2nd, both |
+| ReviewWave | 33 ms | 196 ms (5%) | 3rd, both |
+| AWS S3 | — | 14 ms | 4th |
+| **Total** | **~810-880 ms** | **3,820 ms** | |
+
+The ~4.5× gap is the test host, not the site — see C2. **The ordering is identical**, and it is the ordering that determines what to fix first.
+
+The ReviewWave S3 config: `Content-Length` **56,589 B** on 2026-07-30 and **57,267 B** on 08-13, returned identically under `identity`, `gzip` and `br,gzip` — no compression is available — with **no `Cache-Control`**, and `ETag` + `Last-Modified` present. `gzip -9` would take it to 19,115 B, a 38,152 B saving per uncached visit. The object metadata belongs to ReviewWave, so the fix available here is `defer`; the compression ask has to come from the practice as account holder.
 
 **What deferral does and does not do.** TBT counts blocking between FCP and TTI. Deferring moves work out of that window; it does not delete it. UserWay is a clean shift — nothing above the fold depends on it. GTM is different: its cost is container size, so trimming is a real reduction. The ReviewWave scripts are cheap to execute (196 ms total) but expensive to *wait for* — 2,510 ms of render-blocking across all three — so `defer` helps FCP far more than TBT there.
 
@@ -788,20 +915,20 @@ Byte rows are **hygiene targets**, not TBT predictors — see H1. Each is reacha
 
 | Resource | Current raw | Current wire | Target (raw) | Reachable by |
 |---|---|---|---|---|
-| HTML document | 218,440 B | 33,546 B | **<195,000 B** | H7 removes 25,169 B → ~193,300 B |
-| First-party CSS | 713,944 B | 90,115 B | **<600,000 B** | drop the full Font Awesome build (59,305) + Animate.css (52,789) → 601,850 B; subsetting either clears it |
-| First-party JS | 618,211 B | 160,061 B | **<410,000 B** | drop the heavier of each duplicate pair — Swiper 143,660 + fancyBox 68,253 → 406,298 B (M4) |
-| **First-party total** | **1,550,595 B** | **283,722 B** | **<1,205,000 B** | ~1.3× reduction, all three above |
-| Hero video, mobile | — | 3,112 KiB | **0 KiB** | C1-A — the video is never appended |
-| Hero video, desktop | — | 3,112 KiB | **<1,300 KiB** | C1-D. WebM is 38% of the MP4's bitrate and the browser aborts at a similar buffer point, so expect ≈1,180 KiB |
-| YouTube thumbnails | — | 459 KiB | 0 KiB | facade (H8) |
-| GTM | — | 275 KiB | <100 KiB | container audit (H6) |
+| HTML document | 216,956 B | 33,290 B | **<195,000 B** | H7 removes 25,256 B → ~191,700 B |
+| First-party CSS | ~692,100 B | ~87,390 B | **<600,000 B** | drop the full Font Awesome build (59,305) + Animate.css (52,789) → ~580,000 B |
+| First-party JS | ~603,046 B | ~157,362 B | **<410,000 B** | drop the heavier of each duplicate pair — Swiper 143,660 + fancyBox 68,253 → ~391,000 B (M4) |
+| **First-party total** | **~1,512,102 B** | **~278,042 B** | **<1,205,000 B** | ~1.25× reduction, all three above |
+| Hero video, mobile | — | up to 15,343,649 B | **0 KiB** | C1-A — neither file is fetched |
+| Hero video, desktop | — | up to 15,343,649 B | **<6,000 KiB** | C1-D (WebM only, 5,802,541 B) and C1-F (faststart, so playback starts before the file finishes) |
+| YouTube thumbnails | — | 459 KiB | 0 KiB | facade (H8b) |
+| GTM | — | 276 KiB | 160 KiB | retiring the container leaves only `gtag/js` (H6) |
 | Google Fonts | — | 57 KiB | <25 KiB | 5 families → 2 (M5) |
-| TBT | 14,710 ms | — | <5,000 ms | stretch; no configuration change reaches it |
-| LCP | 18.9 s | — | <4.0 s | milestone, not a prediction |
-| CLS | 0.184 | — | <0.1 | C1-A on mobile, C1-B on desktop |
+| Gallery DOM | 105 slide children | — | **35** | untick Loop (H8-0) |
+| LCP | 12.2 s | — | <4.0 s | milestone, not a prediction |
+| CLS | 0.184 cold | — | <0.1 | C1-A on mobile, C1-B on desktop. **Verify cold** |
 
-**On targets.** CLS is the only metric with a mechanism that directly addresses its stated root cause. LCP and TBT are milestones. The 2026-07-28 original stated "<2.5 s LCP" and "TBT <5,000 ms via deferral" as outcomes while its own analysis projected TBT landing at 13,500-15,500 ms. Do not commit to a Core Web Vitals pass without DOM reduction and third-party removal, both beyond configuration.
+**On targets.** CLS is the only metric with a mechanism that directly addresses its stated root cause. LCP is a milestone, not a prediction. **TBT is deliberately absent from this table** — it is not a Core Web Vital, Google publishes no threshold for it, and its absolute value here tracks the test machine (C2). Do not commit to a Core Web Vitals pass without DOM reduction and third-party removal, both beyond configuration.
 
 **Gate:** any change adding >50 KiB of raw payload requires explicit approval.
 
@@ -813,40 +940,42 @@ Ordered by value per hour, with C0 early because its outcome may make later step
 
 | # | Task | Finding | Time | Verification |
 |---|---|---|---|---|
-| **1** | **BB hero row → Show Video On Mobile = No** | C1-A | 5 min | Mobile UA: **no `hiking.mp4`/`hiking.webm` request**; LCP element is the fallback WebP. A `<video src="">` remains — do not check for its absence |
+| **1** | **BB hero row → Show Video On Mobile = No** | C1-A | 5 min | Mobile UA: **no `hiking.mp4`/`hiking.webm` request**; LCP element is the fallback WebP. A `<video src="">` remains — do not check for its absence. Filter DevTools on `hiking`, not on the hostname: six `<img>` legitimately load from that host |
+| **1b** | **Video Gallery module → untick Loop, untick Autoplay**, on `/` and `/testimonials/` | H8-0, M2, M4 | 15 min | `grep -o 'options.carousel.autoplay='` on the rebuilt `2-layout.js` returns nothing; max child elements drops from 105 |
 | 2 | Child-theme rule sizing `.fl-bg-video video` to 100%/100%, **every declaration `!important`** | C1-B | 15 min | Desktop UA: CLS ≤ 0.1; no non-zero shift listed; computed width/height survive a window resize |
 | 3 | **Establish 10Web Booster's state** — off, cache-not-warm, or dead | C0 | 30 min | `grep -oE '<script[^>]+(defer\|async)' \| wc -l` > 0, or the plugin is gone |
 | 4 | `preconnect` to `chiro.inceptionimages.com`; background-image on `.fl-bg-video`; poster preload | C1-C, H5 | 20 min | Hint present; poster paints before video bytes arrive |
-| 5 | Dequeue `global-styles`, `wp-block-library`, `classic-theme-styles`, emoji — **on `wp_enqueue_scripts`** | H7 | 30 min | `grep -c global-styles-inline-css` → 0; raw HTML ≈193,000 B |
+| 5 | Dequeue `global-styles`, `wp-block-library`, `classic-theme-styles`, emoji — **on `wp_enqueue_scripts`** | H7 | 30 min | `grep -c global-styles-inline-css` → 0; raw HTML ≈192,000 B |
 | 6 | `width`/`height` + `loading="lazy"` on the 6 images — BB photo ×1, PowerPack ×1, **UABB Info Box ×4 (template override or output filter)** | H8a, L4 | 1-2 hrs | All 6 carry dimensions and lazy |
 | 7 | Move `fetchpriority="high"` off the ribbon via a core filter — **do with step 6** | H4 | 30 min | Zero `fetchpriority="high"`, or exactly one, on the poster |
 | 8 | `&display=swap`; `dns-prefetch` → `preconnect` for `fonts.googleapis.com` | M5 | 15 min | Webfont audit passes |
 | 9 | **Re-measure: 3 Lighthouse runs, median. Re-run both sweep passes.** | — | 45 min | Establishes a real baseline |
 | 10 | `defer` the three ReviewWave scripts | H2 | 30 min | Render-blocking savings **≤ 200 ms** (they are 2,510 ms today) **and** the chat widget opens and submits |
-| 11 | UserWay: plugin setting if one exists, else idle + `{timeout:3000}` | H3 | 15-90 min | UserWay blocking <200 ms **and** widget appears within 5 s |
+| 11 | UserWay: `remove_action('wp_footer','usw_addplugin_footer_notice')`, then idle + `{timeout:3000}` — or the `_userway_config.mobile=false` kill switch. **The plugin has no defer setting** | H3 | 45-90 min | `grep -o 'cdn.userway.org/widget.js' \| wc -l` returns exactly **1** (2 means the `remove_action` silently failed) **and** the widget appears within 5 s |
 | 12 | Child-theme `style.css` versioning via dequeue/re-register or `style_loader_src` | M6 | 20 min | `?ver=` shows a timestamp **and** changes after an edit |
 | 13 | Pre-warm: cron'd `curl` loop over `page-sitemap.xml` | M1 | 15 min | Sweep shows `hit` on first pass for most URLs |
 | 14 | `Cache-Control: no-cache` on HTML | M1 | 15 min | Header present on all 44; 304s on revalidation |
 | 15 | **Re-measure** | — | 45 min | Compare against step 9 |
-| 16 | Audit the GTM container | H6 | 1-2 hrs | GTM <100 KiB |
-| 17 | YouTube facade — 35 instances. Check whether Swiper still enqueues | H8b, M4 | 2-3 hrs | Zero `i.ytimg.com` on load |
+| 16 | **Retire the GTM container** — it holds exactly one tag; replace with a direct `gtag` | H6 | 30 min | `GTM-WGXQKR5` → 0, `gtag/js?id=G-CW4KKYCP1V` → 1, **and** you appear in GA Realtime within 60 s |
+| 17 | YouTube facade — 35 on `/`, 39 on `/testimonials/`. Re-emit the JSON-LD. Check whether Swiper still enqueues | H8b, M4 | 4-8 hrs | `i.ytimg.com` count equals videos kept, **not 70**; `swiper.min` → 0 on both pages; `VideoObject` count equals rendered poster count |
 | 18 | Reduce Google Fonts 5 families → 2 | M5 | 1 hr | 2 families in the URL |
 | 19 | Regenerate the award ribbon at rendered size | L3 | 20 min | 20 KiB saved |
 | 20 | Enable ETag on static assets | L1 | 10 min | `etag` present |
 | 21 | Diagnose the jQuery Migrate warnings | L6 | 1 hr | Console lists the call sites |
 | 22 | Rename `.jpg.webp` **with a redirect**, after confirming 10Web will not regenerate it | L2 | 1 hr | Correct MIME; no 404 on any reference |
 | 23 | Add a CDN — **after step 22** | M7 | 1-2 hrs | CDN headers present |
+| 23b | Remux `hiking.mp4` with `-movflags +faststart` on the media host | C1-F | 30 min | `moov` atom precedes `mdat`; desktop playback starts before the file finishes |
 | 24 | **Re-measure** | — | 45 min | Compare against step 15 |
 
-**Steps 1-8 total about 3 hours 25 minutes to 4 hours 25 minutes**, of which **the first two are 20 minutes and carry most of the value** on the measured mobile profile. None of the eight requires design approval, a plugin install, or a page rebuild.
+**Steps 1-8 total about 3 hours 40 minutes to 4 hours 40 minutes**, of which **steps 1 and 1b are 20 minutes and carry most of the value**. None requires design approval, a plugin install, or a page rebuild.
 
-**Steps 1-24 total 14.8-20.0 hours** — the sum of the per-step figures above, not a rounded guess. (Rev. 3 said "16-20 hours"; its own per-step figures summed to 14.1-18.3.) Steps 17 and 23 are the largest. There is no configuration path to a green Lighthouse score — steps 16, 17, and DOM reduction are the ceiling-lifting work, and even then 70+ mobile would require removing third parties entirely.
+**Steps 1-24 total 16.5-24.0 hours** — the sum of the per-step figures above. Step 17 is the largest, and grew after the 2026-08-13 pass found a second gallery on `/testimonials/` and the JSON-LD that has to be re-emitted with it. There is no configuration path to a green Lighthouse score; steps 17 and DOM reduction are the ceiling-lifting work, and even then 70+ mobile would require removing third parties entirely.
 
 ### Rollback
 
 | Change | Rollback |
 |---|---|
-| Show Video On Mobile, WebM-only | BB row settings — revert via page revision history |
+| Show Video On Mobile, WebM-only, gallery Loop/Autoplay | BB row and module settings — revert via page revision history |
 | All child-theme CSS/PHP (steps 2, 4, 5, 7, 12) | Revert the file |
 | `width`/`height` and lazy attributes | Remove the attributes |
 | Script deferral | Remove `defer`; restore the inline UserWay snippet from revision history |
@@ -856,12 +985,14 @@ Ordered by value per hour, with C0 early because its outcome may make later step
 | YouTube facade | Restore `pp-video` modules from page revision history |
 | GTM container | GTM keeps version history; restore any prior container version |
 | `.jpg.webp` rename | Keep the redirect — the original `.jpg` no longer exists, so there is no file-level rollback |
+| MP4 faststart remux | Restore `hiking.mp4.bak`. **The file is in a shared media library** — other client sites may reference it |
 
 ---
 
 ## 9. Sources & Methodology
 
-- **Lighthouse 12.6.0**, Chromium 138.0.0.0, emulated Moto G Power, Slow 4G throttling, single page session, initial page load. Captured 2026-07-28 and 2026-07-30 18:13 EDT. Extract: `audit/data/lighthouse-mobile-2026-07-30.md`. Re-measured 2026-08-13 with Lighthouse 12.8.2: `audit/data/lighthouse-mobile-2026-08-13.md`.
+- **Lighthouse.** July: 12.6.0, Chromium 138, emulated Moto G Power, Slow 4G, single runs on 2026-07-28 and 07-30 18:13 EDT — `audit/data/lighthouse-mobile-2026-07-30.md`. August: **12.8.2, Chrome for Testing 152, three runs, median reported**, same emulation — `audit/data/lighthouse-mobile-2026-08-13.md`. `benchmarkIndex` ≈ 1,300 in August; not recorded in July.
+- **Live re-measurement 2026-08-13** — headers, markup census, per-asset bytes, the Beaver Builder bundles, all six ReviewWave resources, UserWay's `widget.js`, the GTM container JSON, 12 sitemap URLs over two passes, and the video file containers.
 - **Header sweeps** — all 44 URLs from `page-sitemap.xml`, two passes each plus an uncompressed-size pass, via GET. `audit/data/header-sweep-2026-07-30.tsv` and `…-run2.tsv`. Reproducer: `audit/data/header-sweep.sh`.
 - **Source inspection** — live HTML for `/` and `/knee-pain-lp/`, fetched with `Accept-Encoding: identity` and measured in **bytes**.
 - **Beaver Builder behaviour** — read directly from `2-layout.js` and `2-layout.css` on the origin. Every claim in C1 about BB's video handling is quoted from that code.
@@ -870,17 +1001,19 @@ Ordered by value per hour, with C0 early because its outcome may make later step
 
 ### Known limitations
 
-1. **Every [LH] figure here is from the single 2026-07-30 18:13 EDT run.** The 2026-08-13 re-measurement (3 runs, median) revises several of them materially — payload to ~17 MB with the hero video downloading in full, and CLS to 0.000 on a warm cache against 0.184 on a cold one. CPU figures from the two dates are not comparable: Lighthouse applies a fixed ×4 multiplier to whatever host runs it.
-2. **Lighthouse figures are single runs and the variance is large.** Two runs of the unmodified site differed by 6 score points, 3.0 s of LCP, 3,810 ms of TBT, and 3.2× of reported payload. Payload varies most because the browser aborts the hero video download at a different point each time. Re-measure with 3+ runs and compare medians.
-3. **Cold-cache TTFB is also highly variable.** Two sweeps of identical content 78 minutes apart gave MISS medians of 0.845 s and 1.788 s, maxima of 2.654 s and 4.946 s, and **disjoint** lists of the five slowest pages. Any per-page cold-cache claim is noise. The warm path — 0.052-0.113 s across 90 requests — is stable.
+1. **CPU figures from the two dates are not comparable.** Lighthouse applies a fixed ×4 multiplier to whatever host runs it; August's `benchmarkIndex` was ≈ 1,300 and July's was not recorded. Quote TBT and main-thread totals with the host attached, or not at all. The *ranking* reproduced exactly on both dates and is what the findings rest on.
+2. **Variance is large on both dates.** Three August runs of the unmodified site spanned 7 score points, 2.0 s of LCP and all of CLS; two July runs spanned 6 points, 3.0 s of LCP and 3.2× of payload. Payload varies most because the browser aborts the hero video download at a different point each run — and did not abort at all in August. Compare medians of 3+ runs.
+3. **Cold-cache TTFB is highly variable.** Two July sweeps of identical content 78 minutes apart gave MISS medians of 0.845 s and 1.788 s, maxima of 2.654 s and 4.946 s, and **disjoint** lists of the five slowest pages; August's 12-URL sample gave a median of 1.054 s and a maximum of 2.225 s. Any per-page cold-cache claim is noise. The warm path — 0.052-0.113 s in July, 0.068-0.103 s in August — is stable.
    *Method:* medians are the lower-middle value (sweep 1, n=44, true median 0.8577) and p90 is `sorted[int(0.9*(n-1))]`. Both are stated so the figures are reproducible; neither convention changes the 2.1× ratio the finding rests on.
 4. **Desktop was not measured**, on either date. The 2026-07-28 run reported 47/100 desktop. This matters because C1-A applies only to mobile and C1-B is the desktop-side fix.
 5. **10Web's configuration state is inferred, not observed.** C0 lists three explanations and cannot distinguish them without wp-admin access.
-6. **Beaver Builder's behaviour was read, not executed.** Every claim in C1 is quoted from `2-layout.js` and `2-layout.css` on the origin. No browser ran that code in this environment. Three specific consequences are inference and are labelled as such in C1-A: that `loadedmetadata` will not fire with `src=""`, that the fallback WebP becomes the LCP element on mobile, and that the empty-`src` document fetch is harmless. Verify all three in DevTools on the first pass.
+6. **Beaver Builder's behaviour was read, not executed.** Every claim in C1 is quoted from `2-layout.js` and `2-layout.css` on the origin; no browser ran that code here. Two consequences remain inference and are labelled in C1-A: that `loadedmetadata` will not fire with `src=""`, and that the fallback WebP becomes the LCP element on mobile. Verify both in DevTools on the first pass. (The third — that an empty `src` triggers a document fetch — is resolved: the HTML media-element load algorithm jumps to the failure step for an empty `src`.)
+   Note also that the bundles were **regenerated on 2026-08-11** by the Beaver Builder 2.10.3.1 upgrade, so anyone re-reading them is reading a different file than the July quotations came from. The `_isMobile` gate and the sizing logic come from the plugin, not the page, and were re-confirmed on 2026-08-13.
 7. **M6's mechanism is unverified.** BB Theme's parent is premium and not readable from outside; the fix depends on which file registers `fl-child-theme`.
 8. **Two pages sampled for source inspection, not 44.** Facts marked site-wide (H7, H2's zero-`defer` count, M6, L1) were confirmed on both `/` and `/knee-pain-lp/`. Header facts come from all 44 URLs across two sweeps.
 9. **C1-A's mobile gate is user-agent based.** BB's `_isMobile()` tests `navigator.userAgent`. It fires under Lighthouse's Moto G emulation and on real phones, but a desktop browser at a narrow viewport still gets the video. This is a device-class fix, not a viewport-width fix.
-10. **No competitor measurements.** Thresholds cited are Google's published Core Web Vitals values. No competitor sites were tested and no ranking or conversion outcomes are projected — page speed is a documented but minor ranking signal, and the case for this work is user experience.
+10. **No competitor measurements.** Thresholds cited are Google's published Core Web Vitals values, re-verified 2026-08-13 (LCP 2.5 s, CLS 0.1, INP 200 ms, all at the 75th percentile of real users). No competitor sites were tested and no ranking or conversion outcome is projected — page speed is a documented but minor ranking signal, and the case for this work is user experience.
+11. **This is lab data.** Google's ranking systems read the Chrome UX Report, not Lighthouse. Whether CrUX holds any record for this origin is unknown — a single-location practice may fall below its sampling floor. Search Console → Experience → Core Web Vitals settles it.
 
 ---
 
