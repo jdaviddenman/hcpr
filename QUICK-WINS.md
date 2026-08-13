@@ -11,7 +11,7 @@ Two Beaver Builder **settings changes** — no code — fix the two biggest perf
 ## Who
 
 - **Developer** (any, with Beaver Builder access): makes both changes. No PHP, no CSS, no plugin settings — just the two module panels. ~35 min.
-- **Owner**: ✓ **approved** the hero photo (`Chronic-Pain-Boone-NC-Hiking.webp`) on 2026-08-13. No further owner decision needed — the change is cleared to build.
+- **Owner**: ✓ **approved** the hero photo (`Chronic-Pain-Boone-NC-Hiking.webp`) on 2026-08-13 — cleared to build. **Then validate the work independently** — don't accept "it's done" on trust. Load the home page yourself: the top should be a still photo, and the testimonials strip should no longer slide on its own. For the numbers, re-run the free test at [pagespeed.web.dev](https://pagespeed.web.dev). Browser-free checks: the Verify section below and `VERIFYING-BACKEND-CLAIMS.md`.
 
 ## Why these two
 
