@@ -11,7 +11,7 @@ Two Beaver Builder **settings changes** — no code — fix the two biggest perf
 ## Who
 
 - **Developer** (any, with Beaver Builder access): makes both changes. No PHP, no CSS, no plugin settings — just the two module panels. ~35 min.
-- **Owner**: one decision — confirm the still photo for the hero. The image already on the site (`Chronic-Pain-Boone-NC-Hiking.webp`) is the natural choice, so nothing new needs designing.
+- **Owner**: ✓ **approved** the hero photo (`Chronic-Pain-Boone-NC-Hiking.webp`) on 2026-08-13. No further owner decision needed — the change is cleared to build.
 
 ## Why these two
 
@@ -45,7 +45,7 @@ In Chrome DevTools, a page load should show **no request to `hiking.mp4` or `hik
 
 The top of the home page currently shows a **moving video** of the hiking scene. After the change it shows the **same scene as a still photo** — the top of the page no longer moves. Everything over it (the headline, the buttons) stays exactly where it is; only the background stops playing. What a visitor feels: on a phone the hero appears almost at once instead of after a long wait, and the page stops downloading a 15 MB video.
 
-The still the owner is approving — the hiking image already on the site (2000×1100):
+The still the owner **approved ✓** — the hiking image already on the site (2000×1100):
 
 ![Proposed hero photo](https://www.highcountrypainrelief.com/wp-content/uploads/2026/02/Chronic-Pain-Boone-NC-Hiking.webp)
 
