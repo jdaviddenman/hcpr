@@ -164,7 +164,7 @@ this order.
 | # | Fix | From | Win | Effort | Owner decision? |
 |---|---|---|---|---|---|
 | **1** | **Gallery: untick Loop and Autoplay**, on `/` and `/testimonials/` | Ticket 3, part 1 | removes ~910 rendered DOM elements on the homepage (105 → 35 slides) **and** a perpetual animation | 15 min | none¹ |
-| 2 | Stop the hero video shifting the page (desktop CSS `!important` rule) | Ticket 1, step 1B | fixes 100% of CLS on desktop; **verify on a cold cache** | 15 min | none |
+| 2 | Stop the hero video shifting the page (child-theme `!important` rule) | Ticket 1, step 1B | fixes CLS on **both** device classes — measured 0.199 on desktop (every run) and 0.184 on mobile (cold run) | 15 min | none |
 | 3 | Dequeue unused WordPress core CSS/JS | audit 01 H7 | ~25 KB off every page | 30 min | none |
 | 4 | Pre-warm the page cache (cron `curl` loop over the sitemap) | audit 01 M1 | fixes cold-cache TTFB on first visits (up to 2.2 s today, 12/12 first requests cold) | 15 min | none² |
 | 5 | Defer the three ReviewWave scripts | Ticket 2, step 1 | removes the largest single render-blocker (1,451 ms) | 20 min + regression test | none³ |
@@ -180,7 +180,11 @@ names as the ceiling, and it is two Beaver Builder checkboxes — settings-only,
 page. Live-confirmed still applicable on 2026-08-13: `loopedSlides` = 35, `autoplay={delay:3000}`, 105 slide
 children. Full detail in Ticket 3, part 1 below.
 
-The CLS fix (item 2) is separable from Ticket 1's parked hero-video change and can ship on its own.
+The CLS fix (item 2) is separable from Ticket 1's parked hero-video change and can ship on its own. It is
+not a "desktop-only" nicety: **CLS is the single failing Core Web Vital on desktop — 0.199, on every run
+(measured 2026-08-13, `audit/data/lighthouse-desktop-2026-08-13.md`)** — and because the video is not
+removed on desktop, this rule is the only remedy there. On mobile it fixes the measured 0.184 shift while
+Ticket 1A is parked. Same rule, both device classes.
 
 ---
 
