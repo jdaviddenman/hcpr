@@ -163,7 +163,7 @@ this order.
 
 | # | Fix | From | Win | Effort | Owner decision? |
 |---|---|---|---|---|---|
-| **1** | **Gallery: untick Loop and Autoplay**, on `/` and `/testimonials/` | Ticket 3, part 1 | removes ~1,286 built DOM elements (105 → 35 slides) **and** a perpetual animation | 15 min | none¹ |
+| **1** | **Gallery: untick Loop and Autoplay**, on `/` and `/testimonials/` | Ticket 3, part 1 | removes ~910 rendered DOM elements on the homepage (105 → 35 slides) **and** a perpetual animation | 15 min | none¹ |
 | 2 | Stop the hero video shifting the page (desktop CSS `!important` rule) | Ticket 1, step 1B | fixes 100% of CLS on desktop; **verify on a cold cache** | 15 min | none |
 | 3 | Dequeue unused WordPress core CSS/JS | audit 01 H7 | ~25 KB off every page | 30 min | none |
 | 4 | Pre-warm the page cache (cron `curl` loop over the sitemap) | audit 01 M1 | fixes cold-cache TTFB on first visits (up to 2.2 s today, 12/12 first requests cold) | 15 min | none² |
@@ -171,7 +171,7 @@ this order.
 
 ¹ Loop-off is invisible to visitors — it only stops Beaver Builder cloning the 35 slides into 105. Autoplay-off
 stops the carousel auto-advancing: a minor UX change, and an accessibility improvement (WCAG 2.2.2, Pause/Stop/Hide).
-Not an aesthetic call, but flag it if the owner wants auto-advance kept — Loop-off alone still carries most of the win.
+The owner has agreed to autoplay off, so both settings go.
 ² Needs server/cron access, not a design decision.
 ³ No design decision, but the review carousel and chat widget are a lead channel — regression-test both on a phone.
 
@@ -582,39 +582,90 @@ has the same plugin open:
 
 **Effort:** part 1 ~30 min, part 2 4–8 hrs. **Blocked on:** SEO sign-off, part 2 only.
 
-### Part 1 — turn off Loop and Autoplay. *~30 min. Do this regardless.*
+### Part 1 — turn off Loop and Autoplay. *~30 min. Do this regardless — no owner decision.*
 
-**Loop.** PowerPack passes `loopedSlides: this._getSlidesCount()` — **35** — to Swiper. Swiper 8.4.7's
-`loopCreate` prepends *and* appends 35 deep clones each, producing **105 children**. Swiper's own default
-with `slidesPerView: 1` would be **2 clones**. Untick Loop and roughly **1,286 JavaScript-built DOM
-elements disappear**.
+The owner has agreed to Autoplay off, so both settings go on the homepage.
 
-> Lighthouse reported "Maximum Child Elements: 105" and DOM depth 28 in both July and August. Not
-> host-dependent, not a single-run artefact.
+**The two modules** (both PowerPack Video Gallery, laid out as a carousel), live-confirmed 2026-08-13:
 
-**Autoplay.** The compiled bundle, three consecutive statements:
+| Page | Module node | Slides | Loop | Autoplay | Change |
+|---|---|---|---|---|---|
+| `/` (home) | `fl-node-joy14c0h3re9` | 35 | **on** | **on** (3000 ms) | untick **Loop and Autoplay** |
+| `/testimonials/` | `fl-node-numzt61c0a34` | 39 | **on** | **already off** | untick **Loop only** |
+
+There is no autoplay to turn off on `/testimonials/` — do not hunt for one.
+
+**Loop.** The served options carry `loop:true`, so Swiper 8.4.7's `loopCreate` clones the whole set —
+`loopedSlides = _getSlidesCount()` = 35, giving **105 rendered slide elements** on the homepage (35 real
++ 35 prepended + 35 appended; Swiper's default at `slidesPerView: 1` would be 2 clones). Each slide subtree
+is ~13 elements, so unticking Loop removes **~910 rendered DOM nodes** on the homepage (70 clones × 13) and
+~1,000 on `/testimonials/` (78 clones × 13, derived — that page was not Lighthouse'd). This is the direct
+hit on the 3,181-element DOM.
+
+> Lighthouse reported "Maximum Child Elements: 105" on `div.pp-video-gallery-items.swiper-wrapper` and DOM
+> depth 28 in both July and August. Not host-dependent, not a single-run artefact.
+
+**Autoplay** (homepage only). The compiled bundle, three consecutive statements:
 
 ```js
-options.carousel={ … autoplay:false, … };
+options.carousel={ … autoplay:false, … loop:true … };
 options.carousel.autoplay={delay:3000,disableOnInteraction:true,};
 gallery_joy14c0h3re9=new PPVideoGallery(options);
 ```
 
-The literal `autoplay:false` is overwritten by a truthy object one statement later, and
-`_getSwiperOptions` contains
+The literal `autoplay:false` is overwritten one statement later, and `_getSwiperOptions` contains
 `if(!this.isBuilderActive&&this.carousel.autoplay){options.autoplay=this.carousel.autoplay;}` with
-`isBuilderActive:false`. **Autoplay is on** — a 1,000 ms transform every 3,000 ms, forever, across 105
-slides, each invoking Swiper's `loopFix()`. That cost continues for as long as the page is open.
+`isBuilderActive:false`. **Autoplay is on** — a 1,000 ms transform every 3,000 ms, forever, each cycle
+calling Swiper's `loopFix()`. That cost runs for as long as the page is open.
+
+**This does not remove Swiper.** `swiper.min.js` still loads — only Part 2 removes it. Part 1 cuts the
+clone DOM and the animation, not the download.
+
+**Steps**
+
+1. wp-admin → **Pages → Home → Launch Beaver Builder**.
+2. Hover the video-strip module (node `joy14c0h3re9`) → **wrench** → module settings.
+3. In the **Carousel** settings, set **Loop** (may read "Infinite Loop") to **No** and **Autoplay** to
+   **No**. Labels vary slightly by PowerPack version — the tells are the setting that produces `loop:true`
+   and the one that produces the autoplay object.
+4. **Save → Done → Publish.**
+5. Repeat on **`/testimonials/`** (module `numzt61c0a34`) — **Loop → No** only.
+6. Clear the **Beaver Builder cache** **and** purge the **LiteSpeed page cache** (note A) — both, or the
+   page keeps serving the old bundle.
+
+**Verify — browser-free, before/after.** Fetch the plain bundle path (no `?ver`, so you get the current
+file):
 
 ```bash
-curl -sS --max-time 30 --compressed 'https://www.highcountrypainrelief.com/wp-content/uploads/bb-plugin/cache/2-layout.js' \
+# Homepage — autoplay gone
+curl -s 'https://www.highcountrypainrelief.com/wp-content/uploads/bb-plugin/cache/2-layout.js' \
   | grep -o 'options.carousel.autoplay={[^}]*}'
-# returns: options.carousel.autoplay={delay:3000,disableOnInteraction:true,}
+#   BEFORE: options.carousel.autoplay={delay:3000,disableOnInteraction:true,}
+#   AFTER:  (nothing)
+
+# Homepage — loop off
+curl -s 'https://www.highcountrypainrelief.com/wp-content/uploads/bb-plugin/cache/2-layout.js' \
+  | grep -oE 'options\.carousel=\{[^;]*\}' | grep -o 'loop:false'
+#   AFTER: loop:false   (BEFORE: nothing — it reads loop:true)
+
+# Testimonials — loop off (post id 83)
+curl -s 'https://www.highcountrypainrelief.com/wp-content/uploads/bb-plugin/cache/83-layout.js' \
+  | grep -oE 'options\.carousel=\{[^;]*\}' | grep -o 'loop:false'
 ```
 
-wp-admin → Pages → Home → Beaver Builder → the Video Gallery module → **untick Loop**, **untick
-Autoplay** → Save → Publish. **Repeat on `/testimonials/`.** Clear the Beaver Builder cache **and**
-confirm the LiteSpeed page cache has caught up. Verify: the command above returns nothing.
+Then the DOM win, which shows only in the rendered page:
+
+- DevTools → Elements → `div.pp-video-gallery-items.swiper-wrapper` child count is **35, not 105**; or
+  Lighthouse "Max child elements" drops from 105.
+- **Do not grep the served HTML for slide count** — it returns 35 before *and* after, because the 35 real
+  slides are always in the HTML and Swiper adds the clones at runtime. That is the trap that makes a
+  correct fix look failed.
+
+Functional: the carousel still shows every video, swipe and click still work, and the homepage no longer
+auto-advances.
+
+**Rollback:** re-tick the settings, or restore the page from Beaver Builder revision history. Settings
+only, no code.
 
 ### Part 2 — replace with click-to-play. *4–8 hrs.*
 
