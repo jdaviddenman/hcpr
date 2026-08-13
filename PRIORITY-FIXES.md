@@ -499,8 +499,7 @@ A third-party commercial accessibility overlay from **userway.org** — not cust
 Inception. Installed as a WordPress plugin, version 2.4.8, account `Vgm0gbMRdF`.
 
 - **The plugin has no defer setting.** Its entire frontend contribution is one echo of the inline
-  snippet. `/userway/v1/debug` returns only `{account_id, state, created_time, updated_time}`. UserWay's
-  help centre has 36 widget articles and none covers deferred loading.
+  snippet, and UserWay's help centre has 36 widget articles, none covering deferred loading.
 - **Unhooking is one line, not 90 minutes.** The plugin registers output with
   `add_action('wp_footer','usw_addplugin_footer_notice')` — a named global function at default priority 10.
 
@@ -596,18 +595,12 @@ practice sends it from the email on the ReviewWave account, copying Inception:
 > caching, which makes our pages slower. Could you enable gzip or Brotli compression and a
 > `Cache-Control` header on that file? Our developers estimate it would cut it from 57 KB to about 19 KB."
 
-### Two security items — one of them is a plugin update
+### One security item, while you are in the child theme
 
-Both are in `SECURITY-FINDINGS.md` with fixes and verification. Listed here because this ticket already
-has the same plugin open:
+In `SECURITY-FINDINGS.md` with fix and verification:
 
-- **S1 — block `/wp-json/userway/v1/debug` with a child-theme filter.** It returns the PHP version,
-  WordPress version, plugin version, account ID and the **database table prefix** to anyone.
-  **Updating the plugin will not fix it**: the current release 2.6.6 registers the route with
-  `'permission_callback' => function () { return true; }`, byte-identical to the 2.4.8 the site runs.
-  Filter and verification in `SECURITY-FINDINGS.md` S1.
-- **S2** — `/wp-json/wp/v2/users` returns two valid usernames unauthenticated. One filter, or a Solid
-  Security toggle.
+- **S1** — `/wp-json/wp/v2/users` returns two valid usernames unauthenticated. One `rest_endpoints`
+  filter, or a Solid Security toggle.
 
 ---
 
