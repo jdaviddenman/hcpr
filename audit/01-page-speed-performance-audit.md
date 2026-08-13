@@ -439,11 +439,11 @@ rather than a fact of nature.
   })();
   ```
 
-  UserWay is a **WordPress plugin** here (`userway/v1` in `/wp-json/`, with `/save` and `/debug` routes), not a hand-placed snippet.
+  UserWay is a **WordPress plugin** here (`userway/v1` in `/wp-json/`), not a hand-placed snippet.
 - **Impact:** largest single third party — 64% of all third-party blocking, for 2.7% of payload. Loads for every visitor whether or not accessibility features are used.
 - **Fix.** Two questions the July audit left open are now settled, and they point in opposite directions:
 
-  - ❌ **The plugin has no defer, delay, async or mobile setting.** Its entire frontend contribution is one echo of the inline snippet; `/userway/v1/debug` returns only `{account_id, state, created_time, updated_time}`, and UserWay's public help centre has 36 widget articles, none covering deferred loading. Checking the settings first is a dead end.
+  - ❌ **The plugin has no defer, delay, async or mobile setting.** Its entire frontend contribution is one echo of the inline snippet, and UserWay's public help centre has 36 widget articles, none covering deferred loading. Checking the settings first is a dead end.
   - ✅ **Unhooking it is one line, not 60-90 minutes.** The plugin registers its output with `add_action('wp_footer','usw_addplugin_footer_notice')` — a named global function at default priority 10, so `remove_action` with the same arguments removes it.
 
   There is also an **undocumented mobile kill switch** in `widget.js`: if `window._userway_config.mobile` is `false` and the user agent matches `/mobile/i`, the script exits without loading the app. Five lines in the child theme, emitted before the snippet, remove **51,813 B of transfer and 181,374 B of parsed JS+CSS on mobile** — a genuine removal rather than a deferral.

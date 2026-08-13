@@ -9,7 +9,7 @@ Page speed audit, architecture review and remediation plan for
 |---|----------|-------|
 | — | **[Priority Fixes](PRIORITY-FIXES.md)** | **The deliverable.** Plain-English summary for the practice and Inception, plus three self-contained work tickets. Measured live 2026-08-13. **Send this one.** |
 | — | [Verifying Backend Claims](VERIFYING-BACKEND-CLAIMS.md) | Confirming from outside that an asserted fix is live and reaching visitors. Four traps on this server that make a correct fix look failed. Runnable census: [`audit/data/verify-live.sh`](audit/data/verify-live.sh). |
-| — | [Security Findings](SECURITY-FINDINGS.md) | Five items found passively while measuring: an unauthenticated debug endpoint, REST user enumeration, no security headers, a migration leftover, one unassessed gap. |
+| — | [Security Findings](SECURITY-FINDINGS.md) | Four items found passively while measuring: REST user enumeration, no security headers, a migration leftover, one unassessed gap. |
 | 1 | [Page Speed Performance Audit](audit/01-page-speed-performance-audit.md) | 24 findings, 26-step sequence, full evidence. Reconciled to the 2026-08-13 measurements. |
 | 2 | [Spelling & Grammar Audit](audit/02-spelling-grammar-audit.md) | 35 confirmed errors across site chrome and 4 content pages. |
 | 3 | [Page Load & Caching Deep-Dive](audit/03-page-load-caching-deep-dive.md) | Cache policy by domain, cold-cache analysis, Beaver Builder cache behaviour. |
