@@ -153,45 +153,74 @@ PowerPack, Ultimate Addons. BB bundles regenerated 11 Aug: `2-layout.js` 72,591 
 
 ---
 
-## Do these first — none needs an owner decision
+## Do these first — sequenced by value **and** ease
 
-Ticket 1's headline change (hero video off on phones) is **parked**: it changes what phone visitors see, so
-it waits on the owner. Two parts of Ticket 2 are parked for the same reason — delaying the accessibility
-toolbar needs the practice's call, and retiring Google Tag Manager needs the account owner's sign-off. The
-fixes below are pure performance work with no aesthetic or business decision. Hand them to Inception now, in
-this order.
+Ordered so the biggest wins that carry the least risk come first. The **Tier** column matters in a
+multi-plugin WordPress stack: "settings" changes can't affect other plugins and any developer can make
+them; "code" changes (CSS, `defer`, `functions.php`) are where a multi-plugin setup breaks sideways and
+belong on a staging site with a capable developer.
 
-| # | Fix | From | Win | Effort | Owner decision? |
-|---|---|---|---|---|---|
-| **1** | **Gallery: untick Loop and Autoplay**, on `/` and `/testimonials/` | Ticket 3, part 1 | removes ~910 rendered DOM elements on the homepage (105 → 35 slides) **and** a perpetual animation | 15 min | none¹ |
-| 2 | Stop the hero video shifting the page (child-theme `!important` rule) | Ticket 1, step 1B | fixes CLS on **both** device classes — measured 0.199 on desktop (every run) and 0.184 on mobile (cold run) | 15 min | none |
-| 3 | Dequeue unused WordPress core CSS/JS | audit 01 H7 | ~25 KB off every page | 30 min | none |
-| 4 | Pre-warm the page cache (cron `curl` loop over the sitemap) | audit 01 M1 | fixes cold-cache TTFB on first visits (up to 2.2 s today, 12/12 first requests cold) | 15 min | none² |
-| 5 | Defer the three ReviewWave scripts | Ticket 2, step 1 | removes the largest single render-blocker (1,451 ms) | 20 min + regression test | none³ |
+| # | Fix | Win | Effort | Tier |
+|---|---|---|---|---|
+| **1** | **Replace the hero video with a photo** — Beaver Builder row → Background → type **Photo** | removes the **~15 MB video on every device**, makes a static photo the LCP element, and **removes the CLS shift outright** (no video = no resize) | 20 min | **Settings — any dev** |
+| **2** | **Gallery: untick Loop and Autoplay**, on `/` and `/testimonials/` | removes ~910 rendered DOM elements (105 → 35 slides) **and** a perpetual animation | 15 min | **Settings — any dev** |
+| 3 | Pre-warm the page cache (cron `curl` loop over the sitemap) | fixes cold-cache TTFB on first visits (up to 2.2 s today, 12/12 first requests cold) | 15 min | **Safe — needs server/cron access** |
+| 4 | Defer the three ReviewWave scripts | removes the largest single render-blocker (1,451 ms) and helps FCP | 20 min + regression | Code — **staging + capable dev** |
+| 5 | Reduce Google Fonts families / add `display=swap` | small FCP win | 15 min | Code — staging |
 
-¹ Loop-off is invisible to visitors — it only stops Beaver Builder cloning the 35 slides into 105. Autoplay-off
-stops the carousel auto-advancing: a minor UX change, and an accessibility improvement (WCAG 2.2.2, Pause/Stop/Hide).
-The owner has agreed to autoplay off, so both settings go.
-² Needs server/cron access, not a design decision.
-³ No design decision, but the review carousel and chat widget are a lead channel — regression-test both on a phone.
+**Items 1 and 2 are both pure Beaver Builder settings — no CSS, no `defer`, no `functions.php`, nothing
+that can reach another plugin — and between them they carry the two biggest performance problems on the
+site.** That is the whole low-risk, any-developer path, and it now reaches the top-tier wins.
 
-**Number 1 is the biggest unblocked win.** It attacks the 3,181-element DOM and the Swiper CPU cost the audit
-names as the ceiling, and it is two Beaver Builder checkboxes — settings-only, no code, no visual change on the
-page. Live-confirmed still applicable on 2026-08-13: `loopedSlides` = 35, `autoplay={delay:3000}`, 105 slide
-children. Full detail in Ticket 3, part 1 below.
+### Why the video drop changes the plan
 
-The CLS fix (item 2) is separable from Ticket 1's parked hero-video change and can ship on its own. It is
-not a "desktop-only" nicety: **CLS is the single failing Core Web Vital on desktop — 0.199, on every run
-(measured 2026-08-13, `audit/data/lighthouse-desktop-2026-08-13.md`)** — and because the video is not
-removed on desktop, this rule is the only remedy there. On mobile it fixes the measured 0.184 shift while
-Ticket 1A is parked. Same rule, both device classes.
+The owner is open to dropping the hero video. Doing it as a Beaver Builder background-type change (Video →
+Photo) is a **settings change, not code**, and it **subsumes three of the harder fixes**:
+
+- **Payload** — the ~15 MB video is gone on desktop *and* mobile, not just phones. No design gate on
+  device class.
+- **LCP** — a static photo replaces a video built in JavaScript. The old Load Delay (82% of LCP on
+  desktop, 65–73% on mobile) largely disappears. *Verify one thing:* turn **off** any "lazy load" toggle
+  on the row background so the photo counts as the LCP element; for the last slice of LCP you could still
+  preload it, but that is the staging-tier `functions.php` work and is not required for most of the win.
+- **CLS** — no `<video>` element means no `loadedmetadata` resize, so the measured **0.199 desktop / 0.184
+  mobile** shift is gone. **This removes the need for the child-theme `!important` CSS rule** (old item 2)
+  and for the 1C preload work. The CSS/defer changes you were wary of drop off the critical path.
+
+Use the existing fallback image (`Chronic-Pain-Boone-NC-Hiking.webp`, 77 KB, already on the site) so no new
+asset is needed; the owner only confirms the still they want. If they later prefer to **keep the video on
+desktop** and drop it on phones only, that is the lighter variant — but it keeps the desktop CLS failure and
+then does need the child-theme CSS rule. Dropping it everywhere is both higher value and lower effort.
+
+**Parked, still waiting on a decision:** Ticket 2's UserWay delay (accessibility owner) and GTM retirement
+(analytics account owner). **No longer needed if the video is dropped:** the child-theme CLS rule (Ticket 1
+step 1B) and the 1C early-paint work — keep them only if the owner keeps desktop video.
+
+Full detail: the video-photo change is Ticket 1 (option E) below; the gallery change is Ticket 3, part 1.
 
 ---
 
-## TICKET 1 — Hero background video *(headline change PARKED — waiting on the owner's call on the still photo)*
+## TICKET 1 — Hero background video *(owner is open to dropping it — recommended route is option E, replace with a photo)*
 
-**Effort:** ~80 min, plus optional 30 min on the media host. **Blocked on:** the practice's yes.
-Independent of Tickets 2 and 3, but see note C.
+**The recommended fix is now option E — replace the video with a photo** (see the fixes list at the top).
+It is a Beaver Builder settings change, removes the ~15 MB video on every device, and fixes LCP and CLS at
+once, so options A–D and the child-theme CSS below are only relevant if the owner decides to **keep** the
+video on desktop.
+
+**Option E, specifically:** wp-admin → Pages → Home → Launch Beaver Builder → hover the hero row (node
+`49vu6prnm80g`) → wrench → **Row Settings → Style → Background** → set **Type** from **Video** to **Photo**
+→ choose `Chronic-Pain-Boone-NC-Hiking.webp` (the current fallback, already on the site) → turn **off** any
+background "lazy load" toggle → Save → Done → Publish. Then clear the BB cache and purge the LiteSpeed page
+cache (note A).
+
+**Verify option E** (browser-free): `curl -s 'https://www.highcountrypainrelief.com/?cb='$(date +%s) | grep -c 'data-mp4'`
+returns **0** (was 1), and a DevTools Network load shows **no request to `hiking.mp4` or `hiking.webm` on
+desktop or mobile**. Re-run Lighthouse: LCP element is the photo, CLS from the hero is 0.
+
+**Effort:** ~20 min. **Rollback:** set Background Type back to Video, or restore the page revision.
+
+The rest of this ticket (options A–D, the sizing CSS, the preload) applies only if the video is kept on
+desktop. Independent of Tickets 2 and 3, but see note C.
 
 ### Why this is first
 
