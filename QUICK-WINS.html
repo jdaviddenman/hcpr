@@ -1,0 +1,266 @@
+<title>HCPR Quick Wins</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#eef2f0; --surface:#ffffff; --surface-2:#f4f7f6;
+    --ink:#15201e; --muted:#586b66; --faint:#7d8d89;
+    --line:#dce3e1; --line-strong:#c7d1ce;
+    --accent:#0f7a67; --accent-ink:#0a5645; --accent-soft:#e2efec;
+    --shadow:0 1px 2px rgba(20,40,36,.04),0 6px 24px rgba(20,40,36,.06);
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  :root:not([data-theme="light"]){ @media (prefers-color-scheme:dark){
+    --bg:#0c1211; --surface:#141c1a; --surface-2:#19221f;
+    --ink:#e8ecea; --muted:#94a39e; --faint:#71827d;
+    --line:#243230; --line-strong:#324340;
+    --accent:#46c1a7; --accent-ink:#7fd8c5; --accent-soft:#13312b;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 30px rgba(0,0,0,.35);
+  }}
+  :root[data-theme="dark"]{
+    --bg:#0c1211; --surface:#141c1a; --surface-2:#19221f;
+    --ink:#e8ecea; --muted:#94a39e; --faint:#71827d;
+    --line:#243230; --line-strong:#324340;
+    --accent:#46c1a7; --accent-ink:#7fd8c5; --accent-soft:#13312b;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 30px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--sans); line-height:1.6;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  .wrap{max-width:60rem; margin:0 auto; padding:clamp(1.5rem,4vw,3.5rem) clamp(1.1rem,4vw,2rem) 4rem}
+  a{color:var(--accent-ink); text-underline-offset:2px}
+  a:focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radius:2px}
+
+  .eyebrow{
+    font-size:.72rem; letter-spacing:.13em; text-transform:uppercase;
+    color:var(--accent-ink); font-weight:650; margin:0 0 .7rem;
+  }
+  h1{
+    font-size:clamp(2rem,5vw,2.9rem); line-height:1.05; letter-spacing:-.02em;
+    margin:0 0 .6rem; text-wrap:balance; font-weight:700;
+  }
+  .lede{font-size:1.12rem; color:var(--muted); margin:0; max-width:40rem; text-wrap:pretty}
+  .meta{
+    display:flex; flex-wrap:wrap; gap:.5rem; margin-top:1.5rem;
+  }
+  .chip{
+    font-size:.8rem; color:var(--ink); background:var(--surface);
+    border:1px solid var(--line-strong); border-radius:999px;
+    padding:.34rem .8rem; display:inline-flex; align-items:center; gap:.45rem;
+    font-variant-numeric:tabular-nums;
+  }
+  .chip b{font-weight:650}
+  .dot{width:.5rem; height:.5rem; border-radius:50%; background:var(--accent); flex:none}
+
+  .rule{height:1px; background:var(--line); border:0; margin:2.5rem 0}
+
+  .h2{
+    font-size:.76rem; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--faint); font-weight:650; margin:0 0 1.1rem;
+  }
+
+  /* stat row */
+  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:.9rem}
+  @media(max-width:640px){.stats{grid-template-columns:repeat(2,1fr)}}
+  .stat{
+    background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:1.05rem 1.1rem; box-shadow:var(--shadow);
+  }
+  .stat .fig{
+    font-size:1.7rem; font-weight:700; letter-spacing:-.02em; color:var(--ink);
+    font-variant-numeric:tabular-nums; line-height:1.1;
+  }
+  .stat .fig .arrow{color:var(--accent); font-weight:600; margin:0 .1em}
+  .stat .cap{font-size:.82rem; color:var(--muted); margin-top:.4rem; line-height:1.4}
+
+  /* fix cards */
+  .fixes{display:flex; flex-direction:column; gap:1.1rem}
+  .fix{
+    background:var(--surface); border:1px solid var(--line); border-radius:14px;
+    padding:clamp(1.2rem,3vw,1.8rem); box-shadow:var(--shadow);
+  }
+  .fix-head{display:flex; gap:1.1rem; align-items:baseline}
+  .num{
+    font-size:2.6rem; font-weight:300; line-height:.9; color:var(--accent);
+    font-variant-numeric:tabular-nums; flex:none; letter-spacing:-.03em;
+  }
+  .fix-title{margin:0; font-size:1.28rem; font-weight:680; letter-spacing:-.01em; text-wrap:balance}
+  .fix-title .path{
+    display:block; font-size:.83rem; font-weight:500; color:var(--muted);
+    margin-top:.3rem; font-variant-numeric:tabular-nums;
+  }
+  .win{margin:1.1rem 0 0; color:var(--ink)}
+  .win b{color:var(--accent-ink); font-weight:650}
+  .badges{display:flex; flex-wrap:wrap; gap:.5rem; margin-top:1.1rem}
+  .badge{
+    font-size:.76rem; padding:.3rem .7rem; border-radius:999px;
+    display:inline-flex; align-items:center; gap:.4rem; font-weight:600;
+    font-variant-numeric:tabular-nums;
+  }
+  .badge.effort{background:var(--surface-2); border:1px solid var(--line); color:var(--ink)}
+  .badge.tier{background:var(--accent-soft); color:var(--accent-ink)}
+
+  .do{margin-top:1.3rem; border-top:1px solid var(--line); padding-top:1.2rem}
+  .do .lbl{font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); font-weight:650; margin:0 0 .6rem}
+  .do ol{margin:0; padding-left:1.15rem; display:flex; flex-direction:column; gap:.4rem}
+  .do li{padding-left:.2rem}
+  code{
+    font-family:var(--mono); font-size:.86em; background:var(--surface-2);
+    border:1px solid var(--line); border-radius:5px; padding:.08em .38em;
+  }
+  .verify{
+    margin-top:1rem; background:var(--surface-2); border:1px solid var(--line);
+    border-radius:10px; overflow-x:auto;
+  }
+  .verify pre{
+    margin:0; padding:.9rem 1rem; font-family:var(--mono); font-size:.8rem;
+    line-height:1.65; color:var(--ink); white-space:pre;
+  }
+  .verify .c{color:var(--accent-ink)}
+
+  /* who */
+  .who{display:grid; grid-template-columns:1fr 1fr; gap:1.1rem}
+  @media(max-width:640px){.who{grid-template-columns:1fr}}
+  .who .card{
+    background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:1.2rem 1.3rem; box-shadow:var(--shadow);
+  }
+  .who h3{margin:0 0 .5rem; font-size:1.02rem; font-weight:670}
+  .who p{margin:0; color:var(--muted); font-size:.95rem}
+  .who .card b{color:var(--ink); font-weight:600}
+
+  .note{
+    background:var(--accent-soft); border:1px solid transparent; border-radius:12px;
+    padding:1.1rem 1.3rem; color:var(--accent-ink); font-size:.95rem;
+  }
+  :root:not([data-theme="light"]){ @media(prefers-color-scheme:dark){ .note{border-color:var(--line-strong)} }}
+  :root[data-theme="dark"] .note{border-color:var(--line-strong)}
+  .note b{font-weight:670}
+
+  footer{margin-top:2.5rem; color:var(--faint); font-size:.82rem; line-height:1.6}
+  footer a{color:var(--accent-ink)}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Website performance · High Country Pain Relief</p>
+    <h1>Two quick wins</h1>
+    <p class="lede">Two Beaver Builder settings changes — no code — fix the site's two biggest performance problems. Any developer can make them, and either reverts in one click.</p>
+    <div class="meta">
+      <span class="chip"><span class="dot"></span><b>~35 min</b>&nbsp;total</span>
+      <span class="chip"><b>Any developer</b></span>
+      <span class="chip"><b>No code</b> — settings only</span>
+    </div>
+  </header>
+
+  <hr class="rule">
+
+  <section aria-label="Why these two, in numbers">
+    <p class="h2">Why these two — the measured problem</p>
+    <div class="stats">
+      <div class="stat">
+        <div class="fig">~88%</div>
+        <div class="cap">of what a phone downloads is the hero video (~15&nbsp;MB)</div>
+      </div>
+      <div class="stat">
+        <div class="fig">0.199</div>
+        <div class="cap">desktop layout shift, every load — Google's limit is 0.1</div>
+      </div>
+      <div class="stat">
+        <div class="fig">105<span class="arrow">→</span>35</div>
+        <div class="cap">gallery slides once the slideshow stops cloning them</div>
+      </div>
+      <div class="stat">
+        <div class="fig">33<span style="color:var(--faint)">/100</span></div>
+        <div class="cap">current mobile speed score (Google Lighthouse)</div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <p class="h2">The two fixes — do them in order</p>
+  <div class="fixes">
+
+    <article class="fix">
+      <div class="fix-head">
+        <div class="num">1</div>
+        <h2 class="fix-title">Replace the hero video with a photo
+          <span class="path">Beaver Builder row → Background → type <b>Photo</b></span>
+        </h2>
+      </div>
+      <p class="win">Removes the <b>~15&nbsp;MB video on every device</b>, makes a static photo the largest thing to paint (which is what Google times), and <b>removes the page-jump outright</b> — no video means no resize.</p>
+      <div class="badges">
+        <span class="badge effort">20 min</span>
+        <span class="badge tier"><span class="dot" style="background:var(--accent-ink)"></span>Settings — any dev</span>
+      </div>
+      <div class="do">
+        <p class="lbl">How</p>
+        <ol>
+          <li>wp-admin → Pages → Home → Launch Beaver Builder.</li>
+          <li>Hover the top hero row (node <code>49vu6prnm80g</code>) → wrench → <b>Row Settings → Style → Background</b>.</li>
+          <li>Set <b>Type</b> from <b>Video</b> to <b>Photo</b>, choose <code>Chronic-Pain-Boone-NC-Hiking.webp</code> (already on the site), and turn <b>off</b> any background "lazy load" toggle.</li>
+          <li>Save → Publish. Then clear the Beaver Builder cache <b>and</b> purge the LiteSpeed page cache.</li>
+        </ol>
+      </div>
+      <div class="verify" role="group" aria-label="Verify fix 1">
+        <pre><span class="c"># video gone — returns 0 (was 1)</span>
+curl -s "https://www.highcountrypainrelief.com/?cb=$(date +%s)" | grep -c 'data-mp4'</pre>
+      </div>
+    </article>
+
+    <article class="fix">
+      <div class="fix-head">
+        <div class="num">2</div>
+        <h2 class="fix-title">Turn off the gallery's Loop and Autoplay
+          <span class="path">Video Gallery module, on <b>/</b> and <b>/testimonials/</b></span>
+        </h2>
+      </div>
+      <p class="win">Removes <b>~910 duplicated page elements</b> — the slideshow clones its 35 videos into 105 — <b>and</b> a background animation that runs every 3 seconds for as long as the page is open.</p>
+      <div class="badges">
+        <span class="badge effort">15 min</span>
+        <span class="badge tier"><span class="dot" style="background:var(--accent-ink)"></span>Settings — any dev</span>
+      </div>
+      <div class="do">
+        <p class="lbl">How</p>
+        <ol>
+          <li>Open the video-strip module in Beaver Builder and set <b>Loop</b> and <b>Autoplay</b> to <b>No</b>.</li>
+          <li><b>Home</b> (module <code>joy14c0h3re9</code>): untick <b>Loop and Autoplay</b>.</li>
+          <li><b>/testimonials/</b> (module <code>numzt61c0a34</code>): untick <b>Loop only</b> — autoplay is already off there.</li>
+          <li>Save → Publish, then clear both caches as above.</li>
+        </ol>
+      </div>
+      <div class="verify" role="group" aria-label="Verify fix 2">
+        <pre><span class="c"># autoplay gone — returns nothing (was {delay:3000,...})</span>
+curl -s '…/bb-plugin/cache/2-layout.js' | grep -o 'options.carousel.autoplay={[^}]*}'</pre>
+      </div>
+    </article>
+
+  </div>
+
+  <hr class="rule">
+
+  <p class="h2">Who does what</p>
+  <div class="who">
+    <div class="card">
+      <h3>Developer</h3>
+      <p>Any developer with Beaver Builder access makes both changes — <b>no PHP, no CSS, no plugin settings</b>, just the two module panels. About 35 minutes, and nothing here can affect another plugin.</p>
+    </div>
+    <div class="card">
+      <h3>Owner</h3>
+      <p>One decision: <b>confirm the still photo</b> for the hero. The image already on the site is the natural choice, so nothing new needs designing.</p>
+    </div>
+  </div>
+
+  <div class="note" style="margin-top:1.1rem">
+    <b>What these two do not do.</b> They clear the biggest wins that carry no risk. They will not reach a green score on their own — that needs deeper work (third-party scripts, render-blocking) on a staging site with an experienced developer. The full plan is in <code>PRIORITY-FIXES.md</code>.
+  </div>
+
+  <footer>
+    Measured 2026-08-13 against the live site (Lighthouse mobile + desktop, direct source inspection). Figures are single-date measurements; re-check after each change. Node IDs and settings confirmed live on that date.
+  </footer>
+</div>
