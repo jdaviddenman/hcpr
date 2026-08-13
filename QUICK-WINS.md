@@ -41,6 +41,16 @@ curl -s 'https://www.highcountrypainrelief.com/wp-content/uploads/bb-plugin/cach
 
 In Chrome DevTools, a page load should show **no request to `hiking.mp4` or `hiking.webm`**, and the gallery's slide count drops from 105 to 35.
 
+## What a visitor notices — fix 1
+
+The top of the home page currently shows a **moving video** of the hiking scene. After the change it shows the **same scene as a still photo** — the top of the page no longer moves. Everything over it (the headline, the buttons) stays exactly where it is; only the background stops playing. What a visitor feels: on a phone the hero appears almost at once instead of after a long wait, and the page stops downloading a 15 MB video.
+
+The still the owner is approving — the hiking image already on the site (2000×1100):
+
+![Proposed hero photo](https://www.highcountrypainrelief.com/wp-content/uploads/2026/02/Chronic-Pain-Boone-NC-Hiking.webp)
+
+[Open the photo full size ↗](https://www.highcountrypainrelief.com/wp-content/uploads/2026/02/Chronic-Pain-Boone-NC-Hiking.webp)
+
 ## What a visitor notices — fix 2
 
 The video-testimonials section **stops sliding on its own** and waits for the visitor. All 35 videos stay — reachable by the arrows, dots, or a swipe — and clicking one still plays it in the same pop-up; video playback doesn't change, and layout and styling are identical. The one trade-off: the auto-rotation used to hint "there's more here"; the arrows and dots still do, just without the motion. (The 105 → 35 element drop is invisible — those were off-screen duplicate slides the software built to fake the loop.)
