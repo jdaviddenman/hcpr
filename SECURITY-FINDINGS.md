@@ -2,20 +2,20 @@
 
 **13 August 2026.** Everything below came from ordinary `GET` requests to public endpoints, made while
 measuring page speed, plus public-source research. No credentials tried, no input submitted, no scanner
-run, nothing altered. None of it required access the general public does not have — which is the point.
+run, nothing altered. None of it required access the general public does not have.
 
 This is a register of things that surfaced incidentally, not a security audit. A real one needs
 authenticated access, a CVE review of the full stack, and permission to test.
 
-## Severity, stated honestly
+## Severity
 
 **Nothing here is a live compromise, and the site is not currently exposed to any known exploited
 vulnerability.** WordPress is on 7.0.4, which is the current release, and `/wp-json/batch/v1` returns 403
 — so the July core RCE chain (CVE-2026-63030 + CVE-2026-60137, both in CISA's Known Exploited
 Vulnerabilities catalogue) does not apply here.
 
-Two findings are information disclosure, low severity in isolation. Two are missing hardening. **The
-argument for fixing them is cost and timing, not danger** — see "Why this is worth doing anyway" below.
+Two findings are information disclosure, low severity in isolation. Two are missing hardening. The
+argument for fixing them is cost and timing, not exposure — see "Why fix them" below.
 
 | # | Finding | Severity | Cost to fix | Status |
 |---|---|---|---|---|
@@ -23,7 +23,7 @@ argument for fixing them is cost and timing, not danger** — see "Why this is w
 | S2 | REST API allows user enumeration | **Low** | One filter | Open |
 | S3 | No HTTP security headers | **Low–Medium** | 20 min | Open |
 | S4 | Liquid Web Harbor still loaded on AWS | **Low** | 30 min | Open |
-| S5 | Full stack not checked against a vulnerability database | **Unassessed** | Needs a tool and a licence | **The real gap** |
+| S5 | Full stack not checked against a vulnerability database | **Unassessed** | Needs a tool and a licence | Open |
 | — | `xmlrpc.php`, `readme.html` | — | — | **Closed** — both 403 |
 
 ---
@@ -98,8 +98,8 @@ returns 401 or 403, not 200. Check this *after* the filter, not after the update
 ### Nobody has reported this, and it is unfixed in the current release
 
 WPScan records **zero** vulnerabilities for this plugin across **80,000 active installs**, and the endpoint
-is present in the release shipping today. That combination makes coordinated disclosure the highest-value
-action available here: it is unreported, unfixed, and affects every install of the current version.
+is present in the release shipping today. It is unreported, unfixed, and
+affects every install of the current version, which is what makes it worth reporting.
 
 **Report it to UserWay** with the code above and request a tracking ID. A ready-to-send disclosure —
 leading with the vendor's own distributed source as proof it is plugin-specific — is in
@@ -144,7 +144,7 @@ add_filter( 'rest_endpoints', function ( $endpoints ) {
 **Verify:** the endpoint returns 401 or 404, not 200.
 
 Separately: both accounts are Inception's. If the practice has no WordPress login of its own, that is a
-business-continuity question worth raising.
+business-continuity question.
 
 ---
 
@@ -199,9 +199,9 @@ review of all 18 registered REST namespaces against what the site actually uses 
 
 ---
 
-## S5 — The full stack has not been checked against a vulnerability database · The real gap
+## S5 — The full stack has not been checked against a vulnerability database · Unassessed
 
-Everything above is low severity. **This is the one that could be serious, and it is unassessed.**
+Everything above is low severity. This one is not rated because it has not been checked.
 
 The stack is known — WordPress 7.0.4, PHP 8.4.24, Beaver Builder 2.10.3.1, Beaver Themer 1.5.3.2, BB Theme
 1.7.19.2, PowerPack 2.40.1.6, Ultimate Addons (version undetermined), Yoast, UserWay 2.4.8, 10Web Booster,
@@ -219,9 +219,7 @@ Two reasons not to assume it is fine:
 
 ---
 
-## Why this is worth doing anyway
-
-Severity is the wrong frame for these findings. Cost and timing are the right one.
+## Why fix them
 
 [Patchstack's *State of WordPress Security in 2026*](https://patchstack.com/whitepaper/state-of-wordpress-security-in-2026/)
 recorded **11,334 new WordPress vulnerabilities in 2025**, up 42% year on year, with **91% of them in
@@ -241,7 +239,7 @@ stack* — and the SQL-injection half of the July core chain is precisely where 
 matters. The window between disclosure and exploitation is measured in hours; the site is two versions
 behind on the one component doing the leaking.
 
-The business consequence for a practice, in plain terms: the website is the booking channel. A compromise
+The business consequence: the website is the booking channel. A compromise
 takes it offline or injects spam content, and a Google Safe Browsing listing removes the search traffic the
 rest of this project exists to protect. Cyber insurance questionnaires generally ask whether software is
 kept current; "two versions behind on a plugin whose newer release removed the leaking endpoint" is a poor
@@ -272,7 +270,6 @@ on the version gap alone, which is a matter of public record.
 
 The ReviewWave chat widget runs on a medical practice's site. **If it collects patient-identifying details,
 the compliance picture is different from a brochure site's**, and S3's missing headers stop being hygiene.
-Worth asking rather than assuming.
 
 ---
 
