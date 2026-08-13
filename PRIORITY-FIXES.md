@@ -153,7 +153,38 @@ PowerPack, Ultimate Addons. BB bundles regenerated 11 Aug: `2-layout.js` 72,591 
 
 ---
 
-## TICKET 1 — Hero background video
+## Do these first — none needs an owner decision
+
+Ticket 1's headline change (hero video off on phones) is **parked**: it changes what phone visitors see, so
+it waits on the owner. Two parts of Ticket 2 are parked for the same reason — delaying the accessibility
+toolbar needs the practice's call, and retiring Google Tag Manager needs the account owner's sign-off. The
+fixes below are pure performance work with no aesthetic or business decision. Hand them to Inception now, in
+this order.
+
+| # | Fix | From | Win | Effort | Owner decision? |
+|---|---|---|---|---|---|
+| **1** | **Gallery: untick Loop and Autoplay**, on `/` and `/testimonials/` | Ticket 3, part 1 | removes ~1,286 built DOM elements (105 → 35 slides) **and** a perpetual animation | 15 min | none¹ |
+| 2 | Stop the hero video shifting the page (desktop CSS `!important` rule) | Ticket 1, step 1B | fixes 100% of CLS on desktop; **verify on a cold cache** | 15 min | none |
+| 3 | Dequeue unused WordPress core CSS/JS | audit 01 H7 | ~25 KB off every page | 30 min | none |
+| 4 | Pre-warm the page cache (cron `curl` loop over the sitemap) | audit 01 M1 | fixes cold-cache TTFB on first visits (up to 2.2 s today, 12/12 first requests cold) | 15 min | none² |
+| 5 | Defer the three ReviewWave scripts | Ticket 2, step 1 | removes the largest single render-blocker (1,451 ms) | 20 min + regression test | none³ |
+
+¹ Loop-off is invisible to visitors — it only stops Beaver Builder cloning the 35 slides into 105. Autoplay-off
+stops the carousel auto-advancing: a minor UX change, and an accessibility improvement (WCAG 2.2.2, Pause/Stop/Hide).
+Not an aesthetic call, but flag it if the owner wants auto-advance kept — Loop-off alone still carries most of the win.
+² Needs server/cron access, not a design decision.
+³ No design decision, but the review carousel and chat widget are a lead channel — regression-test both on a phone.
+
+**Number 1 is the biggest unblocked win.** It attacks the 3,181-element DOM and the Swiper CPU cost the audit
+names as the ceiling, and it is two Beaver Builder checkboxes — settings-only, no code, no visual change on the
+page. Live-confirmed still applicable on 2026-08-13: `loopedSlides` = 35, `autoplay={delay:3000}`, 105 slide
+children. Full detail in Ticket 3, part 1 below.
+
+The CLS fix (item 2) is separable from Ticket 1's parked hero-video change and can ship on its own.
+
+---
+
+## TICKET 1 — Hero background video *(headline change PARKED — waiting on the owner's call on the still photo)*
 
 **Effort:** ~80 min, plus optional 30 min on the media host. **Blocked on:** the practice's yes.
 Independent of Tickets 2 and 3, but see note C.
