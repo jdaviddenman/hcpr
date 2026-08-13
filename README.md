@@ -6,6 +6,9 @@ Page speed performance audit, architecture review, and remediation roadmap for [
 
 | # | Document | Scope |
 |---|----------|-------|
+| — | **[Priority Fixes](PRIORITY-FIXES.md)** | **The deliverable.** Plain-English summary for the practice and Inception, plus three self-contained work tickets. Re-measured live 2026-08-13; survived six adversarial passes. **Send this one.** |
+| — | [Verifying Backend Claims](VERIFYING-BACKEND-CLAIMS.md) | How to confirm from outside that an asserted fix is live and reaching visitors. Four traps on this server that make a correct fix look failed — and an unshipped one look successful. Runnable census: [`audit/data/verify-live.sh`](audit/data/verify-live.sh). |
+| — | [Security Findings](SECURITY-FINDINGS.md) | Separate register. Five items surfaced passively while measuring: an unauthenticated debug endpoint, REST user enumeration, no security headers, a migration leftover, and one unassessed gap. |
 | 1 | [Page Speed Performance Audit](audit/01-page-speed-performance-audit.md) | Lighthouse 21/100 mobile. LCP breakdown, main-thread analysis, 24 findings, 24-step implementation sequence. **Start here.** |
 | 2 | [Spelling & Grammar Audit](audit/02-spelling-grammar-audit.md) | 35 confirmed errors, 4 style preferences, 1 unverified. Site-wide chrome plus 4 content pages. |
 | 3 | [Page Load & Caching Deep-Dive](audit/03-page-load-caching-deep-dive.md) | Cache policy by domain, cold-cache analysis across two sweeps, YouTube facade, Beaver Builder cache behaviour, third-party load table. |
@@ -15,22 +18,29 @@ Page speed performance audit, architecture review, and remediation roadmap for [
 
 ## Current State
 
-Measured 2026-07-30. **[LH]** = from the Lighthouse run of 18:13 EDT, carried forward and not re-measured. Everything else was measured directly against the live site.
+**Re-measured 2026-08-13**, including three fresh Lighthouse runs (12.8.2, Chrome for Testing 152, mobile,
+median of 3). July figures shown for comparison — see the caveat below the table.
 
-| Metric | Current | Threshold | Notes |
-|--------|---------|-----------|-------|
-| Performance (mobile) | **21/100** [LH] | 90+ | 27 on a 2026-07-28 run of the same unchanged site |
-| LCP | **18.9 s** [LH] | <2.5 s | 83% is Load Delay on the hero video |
-| TBT | **14,710 ms** [LH] | <200 ms | main-thread work totals 36.9 s |
-| CLS | **0.184** [LH] | <0.1 | 100% from one element — Beaver Builder re-sizing the hero video |
-| FCP | **3.0 s** [LH] | <1.8 s | 11 render-blocking resources |
-| Speed Index | **14.1 s** [LH] | <3.4 s | |
-| TTFB, Lighthouse | **700 ms** [LH] | <800 ms | **passes** — but it is one sample of the distribution below |
-| TTFB, cold cache | **0.406-4.946 s** | — | 86 of 88 first requests across two sweeps were cold |
-| TTFB, warm cache | **0.052-0.113 s** | — | stable across 90 observations |
-| Network payload | **5,123 KiB** [LH] | — | 60.7% is the hero video |
-| First-party bytes parsed | **1,514 KiB** | — | 277 KiB on the wire; Brotli hides a 5.5× gap |
-| DOM elements, rendered | **3,197** [LH] | <1,500 | source HTML contains 1,792 — the rest is built by JS |
+| Metric | Aug 2026 (median of 3) | Jul 2026 | Threshold | Notes |
+|--------|------|------|-----------|-------|
+| Performance (mobile) | **33/100** | 21 | 90+ | Aug runs: 27 / 33 / 34 |
+| LCP | **12.2 s** | 18.9 s | <2.5 s | 65-73% is Load Delay on the hero video; same element both months |
+| CLS | **0.000 warm / 0.184 cold** | 0.184 | <0.1 | Appears only on a cache MISS — the path a first-time visitor takes |
+| FCP | **3.9 s** | 3.0 s | <1.8 s | |
+| Speed Index | **7.1 s** | 14.1 s | <3.4 s | |
+| TBT | **1,684 ms** | 14,710 ms | — | **host-dependent, see caveat.** Not a Core Web Vital; Google publishes no threshold |
+| Main-thread work | **10.6 s** | 36.9 s | — | host-dependent |
+| Network payload | **16,986 KiB** | 5,123 KiB | — | **~88% is the hero video, now downloading in full (~15 MB)**. July's browser aborted it partway |
+| TTFB, cold cache | **1.054 s** median | 0.845-1.788 s | — | 12 of 12 first requests were cold |
+| TTFB, warm cache | **0.076 s** median | 0.052-0.113 s | — | stable |
+| DOM elements, rendered | **3,181** | 3,197 | <1,500 | max child elements 105 in both months — the Swiper loop clones |
+
+> **The CPU rows are not comparable across the two months, and the site is not why.** Lighthouse
+> calibrates the simulated *network* but applies a fixed ×4 CPU multiplier to whatever machine runs it.
+> August ran at `benchmarkIndex` ≈ 1,300; July's index was not recorded. **Quote CPU figures with the
+> host attached, or not at all.** What reproduced exactly across both: the LCP element and its selector,
+> CLS coming from that one element, 105 max child elements, DOM depth 28, the render-blocking leader
+> (ReviewWave's S3 config), and the third-party cost ranking (UserWay 1st, GTM 2nd, ReviewWave 3rd).
 
 ## The Short Version
 
