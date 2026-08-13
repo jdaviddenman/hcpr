@@ -101,9 +101,11 @@ WPScan records **zero** vulnerabilities for this plugin across **80,000 active i
 is present in the release shipping today. That combination makes coordinated disclosure the highest-value
 action available here: it is unreported, unfixed, and affects every install of the current version.
 
-**Report it to UserWay** with the code above and request a tracking ID. The class of finding is already
-accepted — accessiBe, a competing accessibility overlay, took **CVE-2025-10375** and **CVE-2025-13113**
-for exposing configuration data including account IDs to unauthenticated users on public pages.
+**Report it to UserWay** with the code above and request a tracking ID. A ready-to-send disclosure —
+leading with the vendor's own distributed source as proof it is plugin-specific — is in
+`USERWAY-DISCLOSURE.md`. The class of finding is already accepted — accessiBe, a competing accessibility
+overlay, took **CVE-2025-10375** and **CVE-2025-13113** for exposing configuration data including account
+IDs to unauthenticated users on public pages.
 
 The repository's own issue **#2, "Fix debug endpoint declaration"** (opened 2021-10-17, closed four days
 later) is where this form of the route was introduced. There is no GitHub issue, pull request or advisory
